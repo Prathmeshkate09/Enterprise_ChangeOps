@@ -1,0 +1,30 @@
+{
+  "active_version": "1.4.0",
+  "contracts": [
+    {
+      "api": "customer-api",
+      "version": "1.4.0",
+      "identifier_field": "customer_id",
+      "identifier_type": "string",
+      "compatibility": "current",
+      "owner": "team://customer-platform"
+    },
+    {
+      "api": "customer-api",
+      "version": "2.0.0",
+      "identifier_field": "customer_uuid",
+      "identifier_type": "uuid",
+      "compatibility": "breaking",
+      "owner": "team://customer-platform"
+    }
+  ],
+  "dependencies": [
+    {"source": "customer-api", "target": "crm-sync", "managed": true},
+    {"source": "customer-api", "target": "order-service", "managed": false},
+    {"source": "customer-api", "target": "customer-daily-etl", "managed": true},
+    {"source": "crm-sync", "target": "support-portal", "managed": true},
+    {"source": "customer-daily-etl", "target": "customer-health-dashboard", "managed": true},
+    {"source": "customer-daily-etl", "target": "support-volume-dashboard", "managed": true}
+  ],
+  "artifact_refs": ["artifact://contracts/customer-v2-diff.json"]
+}

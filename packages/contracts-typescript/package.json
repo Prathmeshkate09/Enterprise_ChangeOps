@@ -1,0 +1,36 @@
+{
+  "name": "@changeops/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "26.3.0",
+    "eslint": "9.39.5",
+    "typescript": "7.0.2",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

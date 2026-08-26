@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "changes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "updated_at", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "audit_index",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "change_id", "order": "ASCENDING"},
+        {"fieldPath": "created_at", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

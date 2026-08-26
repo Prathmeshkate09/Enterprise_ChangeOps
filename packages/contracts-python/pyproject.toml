@@ -1,0 +1,12 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "changeops-contracts"
+version = "0.1.0"
+description = "Versioned Pydantic contracts for Enterprise ChangeOps"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "pydantic>=2.11.7,<3",
+]

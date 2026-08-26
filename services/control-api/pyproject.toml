@@ -1,0 +1,21 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "control-api"
+version = "0.1.0"
+description = "Tenant-facing control API for Enterprise ChangeOps"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "changeops-contracts",
+    "changeops-core",
+    "changeops-persistence",
+    "fastapi>=0.141.1,<0.142",
+    "uvicorn>=0.35.0,<0.36",
+]
+
+[tool.uv.sources]
+changeops-contracts = { workspace = true }
+changeops-core = { workspace = true }
+changeops-persistence = { workspace = true }

@@ -1,0 +1,148 @@
+name: enterprise-changeops
+
+x-sandbox-environment: &sandbox-environment
+  APP_ENV: sandbox
+  APP_REGION: local
+  PRODUCTION_WRITES_ENABLED: "false"
+
+x-sandbox-healthcheck: &sandbox-healthcheck
+  test:
+    - CMD
+    - python
+    - -c
+    - >-
+      import urllib.request;
+      urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=2)
+  interval: 10s
+  timeout: 3s
+  retries: 5
+  start_period: 5s
+
+services:
+  firestore-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:573.0.0-emulators
+    command:
+      - gcloud
+      - beta
+      - emulators
+      - firestore
+      - start
+      - --host-port=0.0.0.0:8080
+      - --project=changeops-local
+      - --quiet
+    ports:
+      - "8085:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --silent
+          "http://127.0.0.1:8080/"
+          > /dev/null
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  control-api:
+    build:
+      context: .
+      dockerfile: services/control-api/Dockerfile
+    environment:
+      APP_ENV: sandbox
+      APP_REGION: local
+      CONTROL_API_HOST: 0.0.0.0
+      CONTROL_API_PORT: "8000"
+      FIRESTORE_DATABASE: "(default)"
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8080
+      GOOGLE_CLOUD_PROJECT: changeops-local
+      PERSISTENCE_BACKEND: firestore
+      PRODUCTION_WRITES_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      firestore-emulator:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  control-tower:
+    build:
+      context: .
+      dockerfile: apps/control-tower/Dockerfile
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      control-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/api/health').then((response) => {
+            if (!response.ok) process.exit(1)
+          }).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  customer-api-registry:
+    build:
+      context: .
+      dockerfile: enterprise-sandbox/Dockerfile
+      args:
+        SANDBOX_MODULE: changeops_sandbox.catalog_api
+    environment: *sandbox-environment
+    ports:
+      - "8100:8080"
+    healthcheck: *sandbox-healthcheck
+
+  crm-sandbox:
+    build:
+      context: .
+      dockerfile: enterprise-sandbox/Dockerfile
+      args:
+        SANDBOX_MODULE: changeops_sandbox.crm_api
+    environment: *sandbox-environment
+    ports:
+      - "8101:8080"
+    healthcheck: *sandbox-healthcheck
+
+  analytics-sandbox:
+    build:
+      context: .
+      dockerfile: enterprise-sandbox/Dockerfile
+      args:
+        SANDBOX_MODULE: changeops_sandbox.analytics_api
+    environment: *sandbox-environment
+    ports:
+      - "8102:8080"
+    healthcheck: *sandbox-healthcheck
+
+  support-sandbox:
+    build:
+      context: .
+      dockerfile: enterprise-sandbox/Dockerfile
+      args:
+        SANDBOX_MODULE: changeops_sandbox.support_api
+    environment: *sandbox-environment
+    ports:
+      - "8103:8080"
+    healthcheck: *sandbox-healthcheck

@@ -1,0 +1,6 @@
+{
+  "system_id": "support-portal",
+  "lookup_field": "customer_id",
+  "dependent_forms": ["case-create", "customer-search"],
+  "status": "healthy"
+}

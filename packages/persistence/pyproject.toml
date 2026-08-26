@@ -1,0 +1,16 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "changeops-persistence"
+version = "0.1.0"
+description = "Tenant-scoped memory and Firestore persistence adapters for Enterprise ChangeOps"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "changeops-contracts",
+    "google-cloud-firestore>=2.29.0,<3",
+]
+
+[tool.uv.sources]
+changeops-contracts = { workspace = true }

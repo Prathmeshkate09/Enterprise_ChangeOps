@@ -1,0 +1,7 @@
+{
+  "system_id": "crm-sync",
+  "source_field": "customer_id",
+  "destination_field": "external_customer_key",
+  "schema_version": 4,
+  "status": "healthy"
+}
