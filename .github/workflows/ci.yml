@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -61,7 +61,7 @@ jobs:
     needs: quality
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build control API image
         run: docker build --file services/control-api/Dockerfile --tag changeops-control-api:ci .
