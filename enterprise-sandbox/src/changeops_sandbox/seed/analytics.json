@@ -1,0 +1,8 @@
+{
+  "system_id": "customer-daily-etl",
+  "source_field": "customer_id",
+  "output_field": "customer_key",
+  "dependent_dashboards": ["customer-health", "support-volume"],
+  "baseline_row_count": 1000,
+  "status": "healthy"
+}

@@ -1,0 +1,1 @@
+"""Disclosed synthetic seed resources."""

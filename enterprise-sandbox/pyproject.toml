@@ -1,0 +1,19 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "changeops-sandbox"
+version = "0.1.0"
+description = "Functional synthetic enterprise services for Enterprise ChangeOps"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "changeops-contracts",
+    "changeops-core",
+    "fastapi>=0.141.1,<0.142",
+    "uvicorn>=0.35.0,<0.36",
+]
+
+[tool.uv.sources]
+changeops-contracts = { workspace = true }
+changeops-core = { workspace = true }

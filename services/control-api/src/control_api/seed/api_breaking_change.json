@@ -1,0 +1,16 @@
+{
+  "change_id": "chg_phase3_001",
+  "event_id": "evt_phase3_001",
+  "change_type": "api.contract.changed",
+  "title": "Rename customer identifier",
+  "description": "Rename customer_id to customer_uuid across managed sandbox systems.",
+  "source": {
+    "type": "github",
+    "external_id": "pr-42",
+    "url": "https://example.invalid/demo/pr/42"
+  },
+  "environment": "sandbox",
+  "risk_level": "unknown",
+  "created_by": "demo-event-gateway",
+  "trace_id": "trace_phase3_001"
+}

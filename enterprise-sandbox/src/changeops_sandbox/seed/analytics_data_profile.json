@@ -1,0 +1,5 @@
+{
+  "system_id": "customer-daily-etl",
+  "observed_row_count": 1000,
+  "identifier_null_count": 0
+}

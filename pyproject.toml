@@ -1,0 +1,58 @@
+[project]
+name = "enterprise-changeops"
+version = "0.1.0"
+description = "Governed autonomous enterprise change coordination platform"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.12.0,<3",
+    "mypy>=1.17.1,<2",
+    "pip-audit>=2.9.0,<3",
+    "pytest>=8.4.1,<9",
+    "pytest-asyncio>=1.1.0,<2",
+    "ruff>=0.12.10,<0.13",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "enterprise-sandbox",
+    "packages/contracts-python",
+    "packages/changeops-core",
+    "packages/persistence",
+    "services/control-api",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+cache_dir = ".cache/pytest"
+testpaths = ["enterprise-sandbox/tests", "packages", "services", "tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "ASYNC", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+pretty = true
+mypy_path = [
+    "enterprise-sandbox/src",
+    "packages/changeops-core/src",
+    "services/control-api/src",
+]
