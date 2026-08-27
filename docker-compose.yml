@@ -146,3 +146,42 @@ services:
     ports:
       - "8103:8080"
     healthcheck: *sandbox-healthcheck
+
+  agent-fleet:
+    build:
+      context: .
+      dockerfile: services/agent-fleet/Dockerfile
+    environment:
+      APP_ENV: sandbox
+      APP_REGION: local
+      AGENT_FLEET_HOST: agent-fleet
+      AGENT_FLEET_PORT: "8200"
+      AGENT_MODEL_MODE: fake
+      CATALOG_BASE_URL: http://customer-api-registry:8080
+      CRM_BASE_URL: http://crm-sandbox:8080
+      ANALYTICS_BASE_URL: http://analytics-sandbox:8080
+      SUPPORT_BASE_URL: http://support-sandbox:8080
+      PRODUCTION_WRITES_ENABLED: "false"
+    ports:
+      - "8200:8200"
+    depends_on:
+      customer-api-registry:
+        condition: service_healthy
+      crm-sandbox:
+        condition: service_healthy
+      analytics-sandbox:
+        condition: service_healthy
+      support-sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8200/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

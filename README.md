@@ -45,6 +45,8 @@ python scripts/tasks.py smoke
 python scripts/tasks.py sandbox-check
 # Builds the emulator/API, restarts only the API, and verifies recovery:
 python scripts/tasks.py persistence-check
+# Builds the four sandboxes and seven-agent ADK fleet, then runs its golden event:
+python scripts/tasks.py agent-fleet-check
 ```
 
 Start both development services until interrupted:
@@ -69,6 +71,7 @@ Endpoints:
 - CRM sandbox: `http://127.0.0.1:8101`
 - Analytics sandbox: `http://127.0.0.1:8102`
 - Support sandbox: `http://127.0.0.1:8103`
+- Agent Fleet and OpenAPI docs: `http://127.0.0.1:8200` and `http://127.0.0.1:8200/docs`
 
 On systems with GNU Make, the corresponding gates are `make setup`,
 `make lint`, `make test`, `make audit`, `make build`, `make smoke`, and
@@ -89,6 +92,7 @@ acceptance gates:
 ```text
 python scripts/tasks.py sandbox-check
 python scripts/tasks.py persistence-check
+python scripts/tasks.py agent-fleet-check
 ```
 
 The scenario resets its tenant, snapshots every service, migrates and verifies

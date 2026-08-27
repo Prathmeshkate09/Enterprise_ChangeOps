@@ -206,6 +206,154 @@ export interface AuditEvent {
   readonly created_at: string;
 }
 
+export type AgentStatus = "active" | "disabled";
+export type EvidenceTrust = "platform" | "untrusted";
+
+export interface AgentInvocationBudget {
+  readonly max_model_calls: number;
+  readonly max_tool_calls: number;
+  readonly max_turns: number;
+  readonly timeout_seconds: number;
+}
+
+export interface AgentRegistration {
+  readonly agent_id: string;
+  readonly tenant_id: string;
+  readonly display_name: string;
+  readonly description: string;
+  readonly version: string;
+  readonly owner: string;
+  readonly capabilities: readonly string[];
+  readonly allowed_tools: readonly string[];
+  readonly allowed_resource_patterns: readonly string[];
+  readonly risk_ceiling: RiskLevel;
+  readonly runtime_endpoint: string;
+  readonly identity_reference: string;
+  readonly status: AgentStatus;
+  readonly budget: AgentInvocationBudget;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface EvidenceItem {
+  readonly evidence_id: string;
+  readonly tenant_id: string;
+  readonly source_system: string;
+  readonly source_resource: string;
+  readonly summary: string;
+  readonly content_hash: string;
+  readonly trust: EvidenceTrust;
+  readonly observed_at: string;
+  readonly attributes: JsonObject;
+}
+
+export interface DependencyPath {
+  readonly systems: readonly string[];
+  readonly evidence_refs: readonly string[];
+}
+
+export interface OrchestrationDirective {
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly normalized_objective: string;
+  readonly selected_agent_ids: readonly string[];
+  readonly evidence_refs: readonly string[];
+  readonly confidence: number;
+  readonly unknowns: readonly string[];
+}
+
+export interface ImpactAnalysis {
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly affected_systems: readonly string[];
+  readonly dependency_paths: readonly DependencyPath[];
+  readonly severity: RiskLevel;
+  readonly confidence: number;
+  readonly evidence_refs: readonly string[];
+  readonly owner_refs: readonly string[];
+  readonly unknowns: readonly string[];
+}
+
+export interface ComplianceAnalysis {
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly applicable_policy_ids: readonly string[];
+  readonly required_approvals: readonly string[];
+  readonly required_evidence: readonly string[];
+  readonly forbidden_actions: readonly string[];
+  readonly retention_requirements: readonly string[];
+  readonly missing_policy_data: readonly string[];
+  readonly evidence_refs: readonly string[];
+  readonly confidence: number;
+}
+
+export interface RemediationProposal {
+  readonly proposal_id: string;
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly agent_id: string;
+  readonly target_system: string;
+  readonly summary: string;
+  readonly proposed_tool: string;
+  readonly target_resource: string;
+  readonly proposed_arguments: JsonObject;
+  readonly validation_actions: readonly string[];
+  readonly rollback_actions: readonly string[];
+  readonly risk_level: RiskLevel;
+  readonly requires_approval: boolean;
+  readonly confidence: number;
+  readonly evidence_refs: readonly string[];
+  readonly unknowns: readonly string[];
+}
+
+export interface VerificationProposal {
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly checks: readonly string[];
+  readonly partial_result_handling: string;
+  readonly failure_handling: string;
+  readonly evidence_refs: readonly string[];
+  readonly confidence: number;
+}
+
+export interface AgentInvocationRecord {
+  readonly invocation_id: string;
+  readonly agent_id: string;
+  readonly identity_reference: string;
+  readonly model_name: string;
+  readonly model_calls: number;
+  readonly tool_calls: number;
+  readonly started_at: string;
+  readonly completed_at: string;
+  readonly output_hash: string;
+  readonly evidence_refs: readonly string[];
+}
+
+export interface FleetAnalysisRequest {
+  readonly change_id: string;
+  readonly event: ChangeEvent;
+}
+
+export interface FleetAnalysisResult {
+  readonly analysis_id: string;
+  readonly tenant_id: string;
+  readonly change_id: string;
+  readonly trace_id: string;
+  readonly model_mode: "fake" | "live";
+  readonly orchestration: OrchestrationDirective;
+  readonly impact: ImpactAnalysis;
+  readonly compliance: ComplianceAnalysis;
+  readonly remediation_proposals: readonly RemediationProposal[];
+  readonly verification: VerificationProposal;
+  readonly draft_plan: RemediationPlan;
+  readonly draft_plan_hash: string;
+  readonly evidence: readonly EvidenceItem[];
+  readonly invocations: readonly AgentInvocationRecord[];
+  readonly max_parallel_agents: number;
+  readonly started_at: string;
+  readonly completed_at: string;
+}
+
 export function isWorkflowState(value: string): value is WorkflowState {
   return (WORKFLOW_STATES as readonly string[]).includes(value);
 }

@@ -76,6 +76,7 @@ def lint() -> None:
             "packages/contracts-python/src",
             "packages/changeops-core/src",
             "packages/persistence/src",
+            "services/agent-fleet/src",
             "services/control-api/src",
             "scripts",
         ]
@@ -167,6 +168,28 @@ def persistence_check() -> None:
         environment=scenario_environment,
     )
     print("Phase 3 persistence gate passed; Compose services remain running.", flush=True)
+
+
+def agent_fleet_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    docker = executable("docker")
+    run(
+        [
+            docker,
+            "compose",
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+            "customer-api-registry",
+            "crm-sandbox",
+            "analytics-sandbox",
+            "support-sandbox",
+            "agent-fleet",
+        ]
+    )
+    run([str(VENV_PYTHON), "scripts/phase4_scenario.py"])
 
 
 def wait_for_health(
@@ -294,6 +317,7 @@ def main() -> None:
             "smoke",
             "sandbox-check",
             "persistence-check",
+            "agent-fleet-check",
             "clean",
         ),
     )
@@ -307,6 +331,7 @@ def main() -> None:
         "build": build,
         "sandbox-check": sandbox_check,
         "persistence-check": persistence_check,
+        "agent-fleet-check": agent_fleet_check,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,

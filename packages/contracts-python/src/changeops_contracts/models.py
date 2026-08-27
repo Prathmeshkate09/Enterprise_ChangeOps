@@ -92,6 +92,16 @@ class AuditStatus(StrEnum):
     FAILURE = "failure"
 
 
+class AgentStatus(StrEnum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+
+
+class EvidenceTrust(StrEnum):
+    PLATFORM = "platform"
+    UNTRUSTED = "untrusted"
+
+
 class ChangeSource(ContractModel):
     type: NonEmptyStr
     external_id: NonEmptyStr
@@ -285,3 +295,203 @@ class AuditEvent(ContractModel):
     status: AuditStatus
     redacted_summary: NonEmptyStr
     created_at: AwareDatetime
+
+
+class AgentInvocationBudget(ContractModel):
+    max_model_calls: int = Field(ge=1, le=10)
+    max_tool_calls: int = Field(ge=0, le=25)
+    max_turns: int = Field(ge=1, le=10)
+    timeout_seconds: float = Field(gt=0, le=300)
+
+
+class AgentRegistration(ContractModel):
+    agent_id: NonEmptyStr
+    tenant_id: NonEmptyStr
+    display_name: NonEmptyStr
+    description: NonEmptyStr
+    version: NonEmptyStr
+    owner: NonEmptyStr
+    capabilities: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    allowed_tools: tuple[NonEmptyStr, ...]
+    allowed_resource_patterns: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    risk_ceiling: RiskLevel
+    runtime_endpoint: AnyUrl
+    identity_reference: NonEmptyStr
+    status: AgentStatus
+    budget: AgentInvocationBudget
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_registration(self) -> AgentRegistration:
+        if self.updated_at < self.created_at:
+            raise ValueError("updated_at cannot be earlier than created_at")
+        for values, label in (
+            (self.capabilities, "capabilities"),
+            (self.allowed_tools, "allowed_tools"),
+            (self.allowed_resource_patterns, "allowed_resource_patterns"),
+        ):
+            if len(values) != len(set(values)):
+                raise ValueError(f"{label} values must be unique")
+        if any(tool == "*" or "*" in tool for tool in self.allowed_tools):
+            raise ValueError("agent tools must be exact registered tool names")
+        if any(pattern == "*" for pattern in self.allowed_resource_patterns):
+            raise ValueError("agent resource scope cannot be unrestricted")
+        return self
+
+
+class EvidenceItem(ContractModel):
+    evidence_id: NonEmptyStr
+    tenant_id: NonEmptyStr
+    source_system: NonEmptyStr
+    source_resource: Reference
+    summary: NonEmptyStr
+    content_hash: Sha256Digest
+    trust: EvidenceTrust
+    observed_at: AwareDatetime
+    attributes: dict[str, JsonValue]
+
+
+class DependencyPath(ContractModel):
+    systems: tuple[NonEmptyStr, ...] = Field(min_length=2)
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+
+
+class OrchestrationDirective(ContractModel):
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    normalized_objective: NonEmptyStr
+    selected_agent_ids: tuple[NonEmptyStr, ...] = Field(min_length=6, max_length=6)
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+    confidence: Confidence
+    unknowns: tuple[NonEmptyStr, ...]
+
+
+class ImpactAnalysis(ContractModel):
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    affected_systems: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    dependency_paths: tuple[DependencyPath, ...]
+    severity: RiskLevel
+    confidence: Confidence
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+    owner_refs: tuple[Reference, ...]
+    unknowns: tuple[NonEmptyStr, ...]
+
+
+class ComplianceAnalysis(ContractModel):
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    applicable_policy_ids: tuple[NonEmptyStr, ...]
+    required_approvals: tuple[NonEmptyStr, ...]
+    required_evidence: tuple[NonEmptyStr, ...]
+    forbidden_actions: tuple[NonEmptyStr, ...]
+    retention_requirements: tuple[NonEmptyStr, ...]
+    missing_policy_data: tuple[NonEmptyStr, ...]
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+    confidence: Confidence
+
+
+class RemediationProposal(ContractModel):
+    proposal_id: NonEmptyStr
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    agent_id: NonEmptyStr
+    target_system: NonEmptyStr
+    summary: NonEmptyStr
+    proposed_tool: NonEmptyStr
+    target_resource: NonEmptyStr
+    proposed_arguments: dict[str, JsonValue]
+    validation_actions: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    rollback_actions: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    risk_level: RiskLevel
+    requires_approval: bool
+    confidence: Confidence
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+    unknowns: tuple[NonEmptyStr, ...]
+
+
+class VerificationProposal(ContractModel):
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    checks: tuple[NonEmptyStr, ...] = Field(min_length=1)
+    partial_result_handling: NonEmptyStr
+    failure_handling: NonEmptyStr
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+    confidence: Confidence
+
+
+class AgentInvocationRecord(ContractModel):
+    invocation_id: NonEmptyStr
+    agent_id: NonEmptyStr
+    identity_reference: NonEmptyStr
+    model_name: NonEmptyStr
+    model_calls: int = Field(ge=0)
+    tool_calls: int = Field(ge=0)
+    started_at: AwareDatetime
+    completed_at: AwareDatetime
+    output_hash: Sha256Digest
+    evidence_refs: tuple[Reference, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_invocation_times(self) -> AgentInvocationRecord:
+        if self.completed_at < self.started_at:
+            raise ValueError("completed_at cannot be earlier than started_at")
+        return self
+
+
+class FleetAnalysisRequest(ContractModel):
+    change_id: NonEmptyStr
+    event: ChangeEvent
+
+
+class FleetAnalysisResult(ContractModel):
+    analysis_id: NonEmptyStr
+    tenant_id: NonEmptyStr
+    change_id: NonEmptyStr
+    trace_id: NonEmptyStr
+    model_mode: Literal["fake", "live"]
+    orchestration: OrchestrationDirective
+    impact: ImpactAnalysis
+    compliance: ComplianceAnalysis
+    remediation_proposals: tuple[RemediationProposal, ...] = Field(min_length=3, max_length=3)
+    verification: VerificationProposal
+    draft_plan: RemediationPlan
+    draft_plan_hash: Sha256Digest
+    evidence: tuple[EvidenceItem, ...] = Field(min_length=1)
+    invocations: tuple[AgentInvocationRecord, ...] = Field(min_length=7, max_length=7)
+    max_parallel_agents: int = Field(ge=1)
+    started_at: AwareDatetime
+    completed_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_analysis_scope(self) -> FleetAnalysisResult:
+        if self.completed_at < self.started_at:
+            raise ValueError("completed_at cannot be earlier than started_at")
+        scoped = (self.orchestration, self.impact, self.compliance, self.verification)
+        if any(item.tenant_id != self.tenant_id for item in scoped):
+            raise ValueError("all structured outputs must match the result tenant")
+        if any(item.change_id != self.change_id for item in scoped):
+            raise ValueError("all structured outputs must match the result change")
+        if (
+            self.draft_plan.tenant_id != self.tenant_id
+            or self.draft_plan.change_id != self.change_id
+        ):
+            raise ValueError("draft plan scope must match the result")
+        if any(
+            proposal.tenant_id != self.tenant_id or proposal.change_id != self.change_id
+            for proposal in self.remediation_proposals
+        ):
+            raise ValueError("all proposals must match the result scope")
+        if len({invocation.agent_id for invocation in self.invocations}) != 7:
+            raise ValueError("exactly seven distinct agent invocations are required")
+        evidence_ids = {item.evidence_id for item in self.evidence}
+        referenced = set(self.orchestration.evidence_refs)
+        referenced.update(self.impact.evidence_refs)
+        referenced.update(self.compliance.evidence_refs)
+        referenced.update(self.verification.evidence_refs)
+        for proposal in self.remediation_proposals:
+            referenced.update(proposal.evidence_refs)
+        if not referenced.issubset(evidence_ids):
+            raise ValueError("structured outputs may reference only supplied evidence")
+        return self

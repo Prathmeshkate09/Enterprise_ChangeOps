@@ -24,6 +24,7 @@ members = [
     "packages/contracts-python",
     "packages/changeops-core",
     "packages/persistence",
+    "services/agent-fleet",
     "services/control-api",
 ]
 
@@ -54,5 +55,6 @@ pretty = true
 mypy_path = [
     "enterprise-sandbox/src",
     "packages/changeops-core/src",
+    "services/agent-fleet/src",
     "services/control-api/src",
 ]

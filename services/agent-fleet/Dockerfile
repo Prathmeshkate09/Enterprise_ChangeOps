@@ -20,15 +20,15 @@ COPY packages/persistence/pyproject.toml packages/persistence/pyproject.toml
 COPY services/agent-fleet/pyproject.toml services/agent-fleet/pyproject.toml
 COPY services/control-api/pyproject.toml services/control-api/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package control-api --no-install-workspace
+    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-agent-fleet --no-install-workspace
 
 COPY packages/contracts-python packages/contracts-python
 COPY packages/changeops-core packages/changeops-core
 COPY packages/persistence packages/persistence
-COPY services/control-api services/control-api
+COPY services/agent-fleet services/agent-fleet
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package control-api
+    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-agent-fleet
 
 USER changeops
-EXPOSE 8000
-CMD ["/app/.venv/bin/uvicorn", "control_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8200
+CMD ["/app/.venv/bin/uvicorn", "changeops_agent_fleet.main:app", "--host", "0.0.0.0", "--port", "8200"]

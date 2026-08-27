@@ -1,6 +1,12 @@
 """Shared Enterprise ChangeOps runtime utilities."""
 
-from changeops_core.config import AppEnvironment, PersistenceBackend, Settings, get_settings
+from changeops_core.config import (
+    AgentModelMode,
+    AppEnvironment,
+    PersistenceBackend,
+    Settings,
+    get_settings,
+)
 from changeops_core.logging import configure_logging, get_logger, redact_sensitive_data
 from changeops_core.state_machine import (
     InvalidStateTransitionError,
@@ -10,6 +16,7 @@ from changeops_core.state_machine import (
 )
 
 __all__ = [
+    "AgentModelMode",
     "AppEnvironment",
     "InvalidStateTransitionError",
     "PersistenceBackend",

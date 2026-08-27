@@ -1,0 +1,12 @@
+{
+  "policies": [
+    {
+      "policy_id": "POL-SANDBOX-BREAKING-CHANGE",
+      "environment": "sandbox",
+      "required_approvals": ["change-owner"],
+      "required_evidence": ["before-state", "after-state", "verification-results"],
+      "forbidden_actions": ["production-write", "unapproved-write"],
+      "retention_requirements": ["retain-complete-agent-and-tool-trace"]
+    }
+  ]
+}
