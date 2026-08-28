@@ -33,6 +33,7 @@ from changeops_contracts.models import (
     RemediationStep,
     RiskLevel,
     ToolIntent,
+    UserRole,
     VerificationProposal,
     WorkflowState,
 )
@@ -69,6 +70,7 @@ __all__ = [
     "RemediationStep",
     "RiskLevel",
     "ToolIntent",
+    "UserRole",
     "VerificationProposal",
     "WorkflowState",
     "calculate_plan_hash",

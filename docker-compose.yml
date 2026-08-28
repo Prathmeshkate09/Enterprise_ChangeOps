@@ -185,3 +185,46 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+
+  tool-gateway:
+    build:
+      context: .
+      dockerfile: services/tool-gateway/Dockerfile
+    environment:
+      APP_ENV: sandbox
+      APP_REGION: local
+      TOOL_GATEWAY_HOST: 0.0.0.0
+      TOOL_GATEWAY_PORT: "8300"
+      TOOL_GATEWAY_AUTH_SECRET: ${TOOL_GATEWAY_AUTH_SECRET:-}
+      AUTH_AUDIENCE: enterprise-changeops-tool-gateway
+      CRM_BASE_URL: http://crm-sandbox:8080
+      ANALYTICS_BASE_URL: http://analytics-sandbox:8080
+      SUPPORT_BASE_URL: http://support-sandbox:8080
+      FIRESTORE_DATABASE: "(default)"
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8080
+      GOOGLE_CLOUD_PROJECT: changeops-local
+      PERSISTENCE_BACKEND: firestore
+      PRODUCTION_WRITES_ENABLED: "false"
+    ports:
+      - "8300:8300"
+    depends_on:
+      firestore-emulator:
+        condition: service_healthy
+      crm-sandbox:
+        condition: service_healthy
+      analytics-sandbox:
+        condition: service_healthy
+      support-sandbox:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8300/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

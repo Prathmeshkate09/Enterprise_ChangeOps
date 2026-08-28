@@ -17,8 +17,10 @@ COPY enterprise-sandbox/pyproject.toml enterprise-sandbox/pyproject.toml
 COPY packages/contracts-python/pyproject.toml packages/contracts-python/pyproject.toml
 COPY packages/changeops-core/pyproject.toml packages/changeops-core/pyproject.toml
 COPY packages/persistence/pyproject.toml packages/persistence/pyproject.toml
+COPY packages/policy-engine/pyproject.toml packages/policy-engine/pyproject.toml
 COPY services/agent-fleet/pyproject.toml services/agent-fleet/pyproject.toml
 COPY services/control-api/pyproject.toml services/control-api/pyproject.toml
+COPY services/tool-gateway/pyproject.toml services/tool-gateway/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-agent-fleet --no-install-workspace
 

@@ -16,6 +16,10 @@
       "agent_id": "crm-agent-v1",
       "tool_name": "crm.update_field_mapping",
       "resource": "crm/customer-sync",
+      "arguments": {
+        "old_field": "customer_id",
+        "new_field": "customer_uuid"
+      },
       "depends_on": [],
       "risk_level": "high",
       "requires_approval": true,

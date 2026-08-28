@@ -60,6 +60,18 @@ class Settings(BaseSettings):
         le=65535,
         validation_alias="AGENT_FLEET_PORT",
     )
+    tool_gateway_host: str = Field(default="127.0.0.1", validation_alias="TOOL_GATEWAY_HOST")
+    tool_gateway_port: int = Field(
+        default=8300,
+        ge=1,
+        le=65535,
+        validation_alias="TOOL_GATEWAY_PORT",
+    )
+    tool_gateway_auth_secret: str | None = Field(
+        default=None,
+        min_length=32,
+        validation_alias="TOOL_GATEWAY_AUTH_SECRET",
+    )
     agent_model_mode: AgentModelMode = Field(
         default=AgentModelMode.FAKE,
         validation_alias="AGENT_MODEL_MODE",

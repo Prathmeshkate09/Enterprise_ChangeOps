@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from changeops_contracts import Approval, ChangeEvent, RemediationPlan
+from changeops_contracts import Approval, ChangeEnvironment, ChangeEvent, RemediationPlan, UserRole
 from pydantic import ValidationError
 
 
@@ -57,9 +57,12 @@ def test_approval_requires_future_expiration() -> None:
             change_id="chg_001",
             plan_id="plan_001",
             plan_hash=f"sha256:{'0' * 64}",
+            plan_version=1,
+            environment=ChangeEnvironment.SANDBOX,
             decision="APPROVED",
             scope=("step_crm_001",),
             approved_by="user_change_manager_001",
+            approved_by_roles=(UserRole.APPROVER,),
             approved_at=decided_at,
             expires_at=decided_at,
             comment="Approved for sandbox execution.",

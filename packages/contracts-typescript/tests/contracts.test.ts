@@ -28,6 +28,10 @@ const plan = {
       agent_id: "crm-agent-v1",
       tool_name: "crm.update_field_mapping",
       resource: "crm/customer-sync",
+      arguments: {
+        old_field: "customer_id",
+        new_field: "customer_uuid",
+      },
       depends_on: [],
       risk_level: "high",
       requires_approval: true,
@@ -61,7 +65,7 @@ describe("shared contracts", () => {
     expect(calculatePlanHash(plan)).toMatch(/^sha256:[0-9a-f]{64}$/u);
     expect(calculatePlanHash(plan)).toBe(calculatePlanHash({ ...plan }));
     expect(calculatePlanHash(sharedPlan)).toBe(
-      "sha256:e3bb064488ef1b3a05e8170e8ecfea2f90f5957d9dce6f47f81b71b3cbbedce3",
+      "sha256:dded9c4bd6aa11720533e36527293072e0f19b660b8e5dc59b5782224d830373",
     );
   });
 });

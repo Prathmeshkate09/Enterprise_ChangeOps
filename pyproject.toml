@@ -24,14 +24,15 @@ members = [
     "packages/contracts-python",
     "packages/changeops-core",
     "packages/persistence",
+    "packages/policy-engine",
     "services/agent-fleet",
     "services/control-api",
+    "services/tool-gateway",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
 cache_dir = ".cache/pytest"
-pythonpath = ["."]
 testpaths = ["enterprise-sandbox/tests", "packages", "services", "tests"]
 
 [tool.ruff]
@@ -56,6 +57,8 @@ pretty = true
 mypy_path = [
     "enterprise-sandbox/src",
     "packages/changeops-core/src",
+    "packages/policy-engine/src",
     "services/agent-fleet/src",
     "services/control-api/src",
+    "services/tool-gateway/src",
 ]

@@ -6,16 +6,18 @@ enterprise changes. The implementation follows the checked-in
 phase-gated architecture and keeps deterministic application code in control
 of workflow state, authorization, approvals, retries, and tool execution.
 
-**Phases 0 through 4 are complete.** The repository includes runnable control
+**Phases 0 through 5 are complete.** The repository includes runnable control
 shells, versioned Python/TypeScript contracts, cross-runtime canonical plan
 hashing, audited deterministic transitions, tenant boundaries, and four
 independently deployable enterprise sandbox services. Firestore now holds
 tenant-partitioned operational state and transactional audit evidence, while
 the Control API exposes resumable change streams. The services use disclosed
 synthetic state to execute, verify, and roll back the `customer_id` to
-`customer_uuid` migration; core results are not hardcoded. Production writes
-remain disabled. The repository tests and acceptance commands below reproduce
-the implemented behavior locally.
+`customer_uuid` migration. Authenticated tool intents now pass through a
+deterministic policy engine, exact-plan approval, transactional idempotency,
+typed sandbox adapters, quotas, and audit enforcement; core results are not
+hardcoded. Production writes remain disabled. The repository tests and
+acceptance commands below reproduce the implemented behavior locally.
 
 ## Prerequisites
 
@@ -47,9 +49,8 @@ python scripts/tasks.py sandbox-check
 python scripts/tasks.py persistence-check
 # Builds the four sandboxes and seven-agent ADK fleet, then runs its golden event:
 python scripts/tasks.py agent-fleet-check
-# Read and validate the cross-session repository context:
-python scripts/tasks.py context-show
-python scripts/tasks.py context-validate
+# Builds Firestore, the Tool Gateway, and sandboxes, then proves the Phase 5 gates:
+python scripts/tasks.py tool-gateway-check
 ```
 
 Start both development services until interrupted:
@@ -75,6 +76,7 @@ Endpoints:
 - Analytics sandbox: `http://127.0.0.1:8102`
 - Support sandbox: `http://127.0.0.1:8103`
 - Agent Fleet and OpenAPI docs: `http://127.0.0.1:8200` and `http://127.0.0.1:8200/docs`
+- Tool Gateway and OpenAPI docs: `http://127.0.0.1:8300` and `http://127.0.0.1:8300/docs`
 
 On systems with GNU Make, the corresponding gates are `make setup`,
 `make lint`, `make test`, `make audit`, `make build`, `make smoke`, and
@@ -82,7 +84,13 @@ On systems with GNU Make, the corresponding gates are `make setup`,
 
 ## Docker Compose
 
-With Docker Desktop running:
+With Docker Desktop running, generate a process-local signing key:
+
+```powershell
+$env:TOOL_GATEWAY_AUTH_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Then start Compose:
 
 ```text
 docker compose up --build
@@ -96,6 +104,7 @@ acceptance gates:
 python scripts/tasks.py sandbox-check
 python scripts/tasks.py persistence-check
 python scripts/tasks.py agent-fleet-check
+python scripts/tasks.py tool-gateway-check
 ```
 
 The scenario resets its tenant, snapshots every service, migrates and verifies
@@ -111,6 +120,8 @@ transition, and resumes SSE strictly after the pre-restart event ID.
 ```text
 apps/control-tower/             Next.js operational UI
 services/control-api/           Tenant-facing FastAPI control API
+services/agent-fleet/           Seven-agent Google ADK analysis fleet
+services/tool-gateway/          Authenticated approval and typed execution boundary
 services/                       Future independently deployable control services
 tool-services/                  Governed typed tool adapters
 enterprise-sandbox/             Four functional synthetic enterprise systems
@@ -118,21 +129,13 @@ packages/changeops-core/        Shared validated config and structured logging
 packages/contracts-python/      Immutable Pydantic wire contracts and plan hashing
 packages/contracts-typescript/  Strict shared TypeScript wire contracts
 packages/persistence/           Tenant-scoped memory and Firestore adapters
-packages/                       Contracts, policy, persistence and test packages
+packages/policy-engine/         Deterministic RBAC, ABAC, risk and approval policy
+packages/                       Contracts, persistence, observability and test packages
 infrastructure/                 Terraform, Workflows and Cloud Build assets
 evaluations/                    Agent datasets, scorers and measured reports
 tests/                          Cross-service contract, integration, security and E2E tests
 docs/                           Plan, architecture decisions and operating documentation
-.context/                       Append-only verified cross-session context
 ```
-
-## Cross-session context
-
-Future coding sessions read `.context/CURRENT.md` before work and append one
-verified record to `.context/sessions.jsonl` before finishing. The context
-engine records decisions, changed files, exact test outcomes, blockers, and
-next steps while redacting common credential shapes. Live source, Git state,
-tests, and service responses always take precedence over recorded context.
 
 ## Security baseline
 

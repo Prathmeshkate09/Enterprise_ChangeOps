@@ -35,6 +35,11 @@ export const POLICY_EFFECTS = [
 export type PolicyEffect = (typeof POLICY_EFFECTS)[number];
 
 export type ApprovalDecision = "APPROVED" | "REJECTED";
+export type UserRole =
+  | "CHANGE_REQUESTER"
+  | "APPROVER"
+  | "AUDITOR"
+  | "PLATFORM_ADMIN";
 export type ActorType = "user" | "agent" | "service" | "system";
 export type AuditStatus = "success" | "rejected" | "failure";
 
@@ -120,6 +125,7 @@ export interface RemediationStep {
   readonly agent_id: string;
   readonly tool_name: string;
   readonly resource: string;
+  readonly arguments: JsonObject;
   readonly depends_on: readonly string[];
   readonly risk_level: RiskLevel;
   readonly requires_approval: boolean;
@@ -180,9 +186,12 @@ export interface Approval {
   readonly change_id: string;
   readonly plan_id: string;
   readonly plan_hash: string;
+  readonly plan_version: number;
+  readonly environment: ChangeEnvironment;
   readonly decision: ApprovalDecision;
   readonly scope: readonly string[];
   readonly approved_by: string;
+  readonly approved_by_roles: readonly UserRole[];
   readonly approved_at: string;
   readonly expires_at: string;
   readonly comment: string;

@@ -311,13 +311,13 @@ def _derive_outputs(
         "compliance": _compliance_output(request, by_id["policy-sandbox-change"]),
     }
     proposal_specs = (
-        ("crm", "crm.propose_mapping_patch", "crm-configuration"),
+        ("crm", "crm.update_field_mapping", "crm-configuration"),
         (
             "analytics",
-            "analytics.propose_mapping_patch",
+            "analytics.update_field_mapping",
             "analytics-configuration",
         ),
-        ("support", "support.propose_lookup_patch", "support-configuration"),
+        ("support", "support.update_lookup_field", "support-configuration"),
     )
     for agent_id, tool, configuration_ref in proposal_specs:
         target = _required_string(by_id[configuration_ref].attributes["system_id"])
@@ -423,6 +423,7 @@ def _build_plan(
             agent_id=proposal.agent_id,
             tool_name=proposal.proposed_tool,
             resource=proposal.target_resource,
+            arguments=proposal.proposed_arguments,
             depends_on=(),
             risk_level=proposal.risk_level,
             requires_approval=True,

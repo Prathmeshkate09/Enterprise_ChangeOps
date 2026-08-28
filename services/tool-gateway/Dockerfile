@@ -2,15 +2,12 @@
 FROM ghcr.io/astral-sh/uv:0.11.15 AS uv
 
 FROM python:3.12-slim AS runtime
-ARG SANDBOX_MODULE
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    SANDBOX_MODULE=${SANDBOX_MODULE}
+    UV_LINK_MODE=copy
 
-RUN test -n "${SANDBOX_MODULE}" \
-    && groupadd --system --gid 1001 changeops \
+RUN groupadd --system --gid 1001 changeops \
     && useradd --system --uid 1001 --gid changeops --create-home changeops
 
 WORKDIR /app
@@ -25,16 +22,17 @@ COPY services/agent-fleet/pyproject.toml services/agent-fleet/pyproject.toml
 COPY services/control-api/pyproject.toml services/control-api/pyproject.toml
 COPY services/tool-gateway/pyproject.toml services/tool-gateway/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_HTTP_TIMEOUT=120 uv sync \
-    --frozen --no-dev --package changeops-sandbox --no-install-workspace
+    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-tool-gateway \
+    --no-install-workspace
 
-COPY enterprise-sandbox enterprise-sandbox
 COPY packages/contracts-python packages/contracts-python
 COPY packages/changeops-core packages/changeops-core
 COPY packages/persistence packages/persistence
+COPY packages/policy-engine packages/policy-engine
+COPY services/tool-gateway services/tool-gateway
 RUN --mount=type=cache,target=/root/.cache/uv \
-    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-sandbox
+    UV_HTTP_TIMEOUT=120 uv sync --frozen --no-dev --package changeops-tool-gateway
 
 USER changeops
-EXPOSE 8080
-CMD ["/bin/sh", "-c", "exec /app/.venv/bin/uvicorn ${SANDBOX_MODULE}:app --host 0.0.0.0 --port 8080"]
+EXPOSE 8300
+CMD ["/app/.venv/bin/uvicorn", "changeops_tool_gateway.main:app", "--host", "0.0.0.0", "--port", "8300"]

@@ -10,7 +10,7 @@ def test_same_plan_always_produces_same_hash(remediation_plan: RemediationPlan) 
     assert calculate_plan_hash(remediation_plan) == calculate_plan_hash(round_tripped)
     assert (
         calculate_plan_hash(remediation_plan)
-        == "sha256:e3bb064488ef1b3a05e8170e8ecfea2f90f5957d9dce6f47f81b71b3cbbedce3"
+        == "sha256:dded9c4bd6aa11720533e36527293072e0f19b660b8e5dc59b5782224d830373"
     )
 
 

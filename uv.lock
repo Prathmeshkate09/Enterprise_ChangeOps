@@ -8,7 +8,9 @@ members = [
     "changeops-contracts",
     "changeops-core",
     "changeops-persistence",
+    "changeops-policy-engine",
     "changeops-sandbox",
+    "changeops-tool-gateway",
     "control-api",
     "enterprise-changeops",
 ]
@@ -300,6 +302,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "changeops-policy-engine"
+version = "0.1.0"
+source = { editable = "packages/policy-engine" }
+dependencies = [
+    { name = "changeops-contracts" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "changeops-contracts", editable = "packages/contracts-python" },
+    { name = "pydantic", specifier = ">=2.11.7,<3" },
+]
+
+[[package]]
 name = "changeops-sandbox"
 version = "0.1.0"
 source = { editable = "enterprise-sandbox" }
@@ -315,6 +332,31 @@ requires-dist = [
     { name = "changeops-contracts", editable = "packages/contracts-python" },
     { name = "changeops-core", editable = "packages/changeops-core" },
     { name = "fastapi", specifier = ">=0.141.1,<0.142" },
+    { name = "uvicorn", specifier = ">=0.35.0,<0.36" },
+]
+
+[[package]]
+name = "changeops-tool-gateway"
+version = "0.1.0"
+source = { editable = "services/tool-gateway" }
+dependencies = [
+    { name = "changeops-contracts" },
+    { name = "changeops-core" },
+    { name = "changeops-persistence" },
+    { name = "changeops-policy-engine" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "changeops-contracts", editable = "packages/contracts-python" },
+    { name = "changeops-core", editable = "packages/changeops-core" },
+    { name = "changeops-persistence", editable = "packages/persistence" },
+    { name = "changeops-policy-engine", editable = "packages/policy-engine" },
+    { name = "fastapi", specifier = ">=0.141.1,<0.142" },
+    { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "uvicorn", specifier = ">=0.35.0,<0.36" },
 ]
 

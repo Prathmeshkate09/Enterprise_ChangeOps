@@ -79,6 +79,13 @@ class ApprovalDecision(StrEnum):
     REJECTED = "REJECTED"
 
 
+class UserRole(StrEnum):
+    CHANGE_REQUESTER = "CHANGE_REQUESTER"
+    APPROVER = "APPROVER"
+    AUDITOR = "AUDITOR"
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
+
+
 class ActorType(StrEnum):
     USER = "user"
     AGENT = "agent"
@@ -186,6 +193,7 @@ class RemediationStep(ContractModel):
     agent_id: NonEmptyStr
     tool_name: NonEmptyStr
     resource: NonEmptyStr
+    arguments: dict[str, JsonValue]
     depends_on: tuple[NonEmptyStr, ...]
     risk_level: RiskLevel
     requires_approval: bool
@@ -265,9 +273,12 @@ class Approval(ContractModel):
     change_id: NonEmptyStr
     plan_id: NonEmptyStr
     plan_hash: Sha256Digest
+    plan_version: int = Field(ge=1)
+    environment: ChangeEnvironment
     decision: ApprovalDecision
     scope: tuple[NonEmptyStr, ...] = Field(min_length=1)
     approved_by: NonEmptyStr
+    approved_by_roles: tuple[UserRole, ...] = Field(min_length=1)
     approved_at: AwareDatetime
     expires_at: AwareDatetime
     comment: NonEmptyStr
@@ -276,6 +287,10 @@ class Approval(ContractModel):
     def validate_expiration(self) -> Approval:
         if self.expires_at <= self.approved_at:
             raise ValueError("approval expiration must be after the decision time")
+        if len(self.approved_by_roles) != len(set(self.approved_by_roles)):
+            raise ValueError("approved_by_roles values must be unique")
+        if not ({UserRole.APPROVER, UserRole.PLATFORM_ADMIN} & set(self.approved_by_roles)):
+            raise ValueError("approval requires an APPROVER or PLATFORM_ADMIN role")
         return self
 
 

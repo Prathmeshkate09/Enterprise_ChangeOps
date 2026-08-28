@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -76,8 +77,10 @@ def lint() -> None:
             "packages/contracts-python/src",
             "packages/changeops-core/src",
             "packages/persistence/src",
+            "packages/policy-engine/src",
             "services/agent-fleet/src",
             "services/control-api/src",
+            "services/tool-gateway/src",
             "scripts",
         ]
     )
@@ -192,12 +195,38 @@ def agent_fleet_check() -> None:
     run([str(VENV_PYTHON), "scripts/phase4_scenario.py"])
 
 
-def context_show() -> None:
-    run([sys.executable, "scripts/context_engine.py", "show"])
-
-
-def context_validate() -> None:
-    run([sys.executable, "scripts/context_engine.py", "validate"])
+def tool_gateway_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    docker = executable("docker")
+    scenario_environment = {
+        "AUTH_AUDIENCE": "enterprise-changeops-tool-gateway",
+        "FIRESTORE_DATABASE": "(default)",
+        "FIRESTORE_EMULATOR_HOST": "127.0.0.1:8085",
+        "GOOGLE_CLOUD_PROJECT": "changeops-local",
+        "PHASE5_TENANT_ID": f"tenant_phase5_{uuid4().hex}",
+        "TOOL_GATEWAY_AUTH_SECRET": secrets.token_urlsafe(48),
+    }
+    run(
+        [
+            docker,
+            "compose",
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+            "firestore-emulator",
+            "crm-sandbox",
+            "analytics-sandbox",
+            "support-sandbox",
+            "tool-gateway",
+        ],
+        environment=scenario_environment,
+    )
+    run(
+        [str(VENV_PYTHON), "scripts/phase5_scenario.py"],
+        environment=scenario_environment,
+    )
 
 
 def wait_for_health(
@@ -326,8 +355,7 @@ def main() -> None:
             "sandbox-check",
             "persistence-check",
             "agent-fleet-check",
-            "context-show",
-            "context-validate",
+            "tool-gateway-check",
             "clean",
         ),
     )
@@ -342,8 +370,7 @@ def main() -> None:
         "sandbox-check": sandbox_check,
         "persistence-check": persistence_check,
         "agent-fleet-check": agent_fleet_check,
-        "context-show": context_show,
-        "context-validate": context_validate,
+        "tool-gateway-check": tool_gateway_check,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,
