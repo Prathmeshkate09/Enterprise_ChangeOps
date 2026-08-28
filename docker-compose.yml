@@ -19,6 +19,33 @@ x-sandbox-healthcheck: &sandbox-healthcheck
   start_period: 5s
 
 services:
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:573.0.0-emulators
+    command:
+      - gcloud
+      - beta
+      - emulators
+      - pubsub
+      - start
+      - --host-port=0.0.0.0:8085
+      - --project=changeops-local
+      - --quiet
+    ports:
+      - "8086:8085"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          import socket;
+          connection=socket.create_connection(('127.0.0.1', 8085), 2);
+          connection.close()
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
   firestore-emulator:
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:573.0.0-emulators
     command:
@@ -84,10 +111,30 @@ services:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: "3000"
+      CONTROL_TOWER_ENVIRONMENT: sandbox
+      CONTROL_TOWER_SANDBOX_ACTIONS_ENABLED: "true"
+      PRODUCTION_WRITES_ENABLED: "false"
+      DEMO_TENANT_ID: tenant_control_tower_demo
+      CONTROL_API_BASE_URL: http://control-api:8000
+      AGENT_FLEET_BASE_URL: http://agent-fleet:8200
+      TOOL_GATEWAY_BASE_URL: http://tool-gateway:8300
+      EVENT_GATEWAY_BASE_URL: http://event-gateway:8400
+      WORKFLOW_COORDINATOR_BASE_URL: http://workflow-coordinator:8500
+      TOOL_GATEWAY_AUTH_SECRET: ${TOOL_GATEWAY_AUTH_SECRET:-local-changeops-tool-gateway-secret-2026}
+      EVENT_GATEWAY_WEBHOOK_SECRET: ${EVENT_GATEWAY_WEBHOOK_SECRET:-local-changeops-event-webhook-secret-2026}
+      AUTH_AUDIENCE: enterprise-changeops-tool-gateway
     ports:
       - "3000:3000"
     depends_on:
       control-api:
+        condition: service_healthy
+      agent-fleet:
+        condition: service_healthy
+      tool-gateway:
+        condition: service_healthy
+      event-gateway:
+        condition: service_healthy
+      workflow-coordinator:
         condition: service_healthy
     healthcheck:
       test:
@@ -195,8 +242,10 @@ services:
       APP_REGION: local
       TOOL_GATEWAY_HOST: 0.0.0.0
       TOOL_GATEWAY_PORT: "8300"
-      TOOL_GATEWAY_AUTH_SECRET: ${TOOL_GATEWAY_AUTH_SECRET:-}
+      TOOL_GATEWAY_AUTH_SECRET: ${TOOL_GATEWAY_AUTH_SECRET:-local-changeops-tool-gateway-secret-2026}
       AUTH_AUDIENCE: enterprise-changeops-tool-gateway
+      WORKFLOW_CALLBACK_URL: http://workflow-coordinator:8500/internal/v1/approval-callbacks
+      WORKFLOW_CALLBACK_SECRET: ${WORKFLOW_CALLBACK_SECRET:-local-changeops-workflow-callback-secret-2026}
       CRM_BASE_URL: http://crm-sandbox:8080
       ANALYTICS_BASE_URL: http://analytics-sandbox:8080
       SUPPORT_BASE_URL: http://support-sandbox:8080
@@ -224,6 +273,89 @@ services:
         - >-
           import urllib.request;
           urllib.request.urlopen('http://127.0.0.1:8300/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  event-gateway:
+    build:
+      context: .
+      dockerfile: services/event-gateway/Dockerfile
+    environment:
+      APP_ENV: sandbox
+      APP_REGION: local
+      EVENT_GATEWAY_HOST: 0.0.0.0
+      EVENT_GATEWAY_PORT: "8400"
+      EVENT_GATEWAY_WEBHOOK_SECRET: ${EVENT_GATEWAY_WEBHOOK_SECRET:-local-changeops-event-webhook-secret-2026}
+      FIRESTORE_DATABASE: "(default)"
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8080
+      GOOGLE_CLOUD_PROJECT: changeops-local
+      PERSISTENCE_BACKEND: firestore
+      PRODUCTION_WRITES_ENABLED: "false"
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+    ports:
+      - "8400:8400"
+    depends_on:
+      firestore-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8400/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  workflow-coordinator:
+    build:
+      context: .
+      dockerfile: services/workflow-coordinator/Dockerfile
+    environment:
+      APP_ENV: sandbox
+      APP_REGION: local
+      WORKFLOW_COORDINATOR_HOST: 0.0.0.0
+      WORKFLOW_COORDINATOR_PORT: "8500"
+      WORKFLOW_CALLBACK_SECRET: ${WORKFLOW_CALLBACK_SECRET:-local-changeops-workflow-callback-secret-2026}
+      TOOL_GATEWAY_AUTH_SECRET: ${TOOL_GATEWAY_AUTH_SECRET:-local-changeops-tool-gateway-secret-2026}
+      AUTH_AUDIENCE: enterprise-changeops-tool-gateway
+      AGENT_FLEET_BASE_URL: http://agent-fleet:8200
+      TOOL_GATEWAY_BASE_URL: http://tool-gateway:8300
+      CRM_BASE_URL: http://crm-sandbox:8080
+      ANALYTICS_BASE_URL: http://analytics-sandbox:8080
+      SUPPORT_BASE_URL: http://support-sandbox:8080
+      FIRESTORE_DATABASE: "(default)"
+      FIRESTORE_EMULATOR_HOST: firestore-emulator:8080
+      GOOGLE_CLOUD_PROJECT: changeops-local
+      PERSISTENCE_BACKEND: firestore
+      PRODUCTION_WRITES_ENABLED: "false"
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+    ports:
+      - "8500:8500"
+    depends_on:
+      pubsub-emulator:
+        condition: service_healthy
+      firestore-emulator:
+        condition: service_healthy
+      agent-fleet:
+        condition: service_healthy
+      tool-gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8500/health/live', timeout=2)
       interval: 10s
       timeout: 3s
       retries: 5

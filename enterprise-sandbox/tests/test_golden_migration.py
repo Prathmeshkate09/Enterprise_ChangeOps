@@ -188,6 +188,25 @@ def test_cross_tenant_snapshot_restore_fails_closed() -> None:
         assert response.json()["error"]["code"] == "tenant_scope_violation"
 
 
+def test_support_verification_failure_injection_is_bounded_and_resettable() -> None:
+    with TestClient(create_support_app()) as client:
+        post_json(client, "/v1/admin/verification-failures", {"count": 1})
+        injected = post_json(
+            client,
+            "/v1/verification/lookup",
+            {"expected_field": "customer_id"},
+        )
+        recovered = post_json(
+            client,
+            "/v1/verification/lookup",
+            {"expected_field": "customer_id"},
+        )
+
+    assert injected["passed"] is False
+    assert injected["checks"][0]["detail"] == "Injected support lookup verification failure."
+    assert recovered["passed"] is True
+
+
 def test_tenant_and_request_validation_use_stable_errors() -> None:
     with TestClient(create_support_app()) as client:
         missing_tenant = client.get("/v1/configuration", headers={"X-Request-ID": "req_known"})

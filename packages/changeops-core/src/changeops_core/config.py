@@ -72,6 +72,73 @@ class Settings(BaseSettings):
         min_length=32,
         validation_alias="TOOL_GATEWAY_AUTH_SECRET",
     )
+    event_gateway_host: str = Field(default="127.0.0.1", validation_alias="EVENT_GATEWAY_HOST")
+    event_gateway_port: int = Field(
+        default=8400,
+        ge=1,
+        le=65535,
+        validation_alias="EVENT_GATEWAY_PORT",
+    )
+    event_gateway_webhook_secret: str | None = Field(
+        default=None,
+        min_length=32,
+        validation_alias="EVENT_GATEWAY_WEBHOOK_SECRET",
+    )
+    event_rate_limit_per_minute: int = Field(
+        default=60,
+        ge=1,
+        le=10_000,
+        validation_alias="EVENT_RATE_LIMIT_PER_MINUTE",
+    )
+    event_max_request_bytes: int = Field(
+        default=262_144,
+        ge=1_024,
+        le=10_485_760,
+        validation_alias="EVENT_MAX_REQUEST_BYTES",
+    )
+    workflow_coordinator_host: str = Field(
+        default="127.0.0.1",
+        validation_alias="WORKFLOW_COORDINATOR_HOST",
+    )
+    workflow_coordinator_port: int = Field(
+        default=8500,
+        ge=1,
+        le=65535,
+        validation_alias="WORKFLOW_COORDINATOR_PORT",
+    )
+    workflow_callback_url: str | None = Field(
+        default=None,
+        validation_alias="WORKFLOW_CALLBACK_URL",
+    )
+    workflow_callback_secret: str | None = Field(
+        default=None,
+        min_length=32,
+        validation_alias="WORKFLOW_CALLBACK_SECRET",
+    )
+    workflow_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        validation_alias="WORKFLOW_MAX_ATTEMPTS",
+    )
+    workflow_retry_base_seconds: float = Field(
+        default=0.25,
+        ge=0.01,
+        le=60,
+        validation_alias="WORKFLOW_RETRY_BASE_SECONDS",
+    )
+    agent_fleet_base_url: str = Field(
+        default="http://127.0.0.1:8200",
+        validation_alias="AGENT_FLEET_BASE_URL",
+    )
+    tool_gateway_base_url: str = Field(
+        default="http://127.0.0.1:8300",
+        validation_alias="TOOL_GATEWAY_BASE_URL",
+    )
+    control_api_base_url: str = Field(
+        default="http://127.0.0.1:8000",
+        validation_alias="CONTROL_API_BASE_URL",
+    )
     agent_model_mode: AgentModelMode = Field(
         default=AgentModelMode.FAKE,
         validation_alias="AGENT_MODEL_MODE",
@@ -133,10 +200,25 @@ class Settings(BaseSettings):
         min_length=1,
         validation_alias="FIRESTORE_DATABASE",
     )
-    pubsub_change_topic: str | None = Field(default=None, validation_alias="PUBSUB_CHANGE_TOPIC")
-    pubsub_dead_letter_topic: str | None = Field(
-        default=None,
+    pubsub_change_topic: str = Field(
+        default="changeops-change-events",
+        min_length=3,
+        validation_alias="PUBSUB_CHANGE_TOPIC",
+    )
+    pubsub_change_subscription: str = Field(
+        default="changeops-workflow-coordinator",
+        min_length=3,
+        validation_alias="PUBSUB_CHANGE_SUBSCRIPTION",
+    )
+    pubsub_dead_letter_topic: str = Field(
+        default="changeops-change-events-dlq",
+        min_length=3,
         validation_alias="PUBSUB_DEAD_LETTER_TOPIC",
+    )
+    pubsub_dead_letter_subscription: str = Field(
+        default="changeops-change-events-dlq-inspection",
+        min_length=3,
+        validation_alias="PUBSUB_DEAD_LETTER_SUBSCRIPTION",
     )
     workflow_name: str | None = Field(default=None, validation_alias="WORKFLOW_NAME")
     artifact_bucket: str | None = Field(default=None, validation_alias="ARTIFACT_BUCKET")

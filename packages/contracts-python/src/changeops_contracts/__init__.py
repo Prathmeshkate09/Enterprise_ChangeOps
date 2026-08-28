@@ -1,6 +1,12 @@
 """Versioned Enterprise ChangeOps domain contracts."""
 
-from changeops_contracts.canonical import calculate_plan_hash, canonical_json, sha256_digest
+from changeops_contracts.canonical import (
+    calculate_plan_hash,
+    canonical_json,
+    derive_change_id,
+    derive_workflow_id,
+    sha256_digest,
+)
 from changeops_contracts.models import (
     ActorType,
     AgentInvocationBudget,
@@ -75,5 +81,7 @@ __all__ = [
     "WorkflowState",
     "calculate_plan_hash",
     "canonical_json",
+    "derive_change_id",
+    "derive_workflow_id",
     "sha256_digest",
 ]

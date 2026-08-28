@@ -78,6 +78,41 @@ def test_valid_transition_updates_version_and_audits_atomically() -> None:
     assert audit[0].event_type == "WORKFLOW_STATE_TRANSITION_SUCCEEDED"
 
 
+def test_transition_can_bind_workflow_metadata() -> None:
+    repository = InMemoryChangeStateRepository()
+    repository.add(make_change())
+
+    updated = make_service(repository).transition(
+        tenant_id="tenant_demo",
+        change_id="chg_001",
+        target=WorkflowState.SCREENING,
+        expected_version=1,
+        trace_id="trace_001",
+        actor_type=ActorType.SERVICE,
+        actor_id="workflow-coordinator",
+        record_updates={"workflow_execution_id": "wf_001"},
+    )
+
+    assert updated.workflow_execution_id == "wf_001"
+
+
+def test_transition_rejects_uncontrolled_record_updates() -> None:
+    repository = InMemoryChangeStateRepository()
+    repository.add(make_change())
+
+    with pytest.raises(ValueError, match="Unsupported transition record updates"):
+        make_service(repository).transition(
+            tenant_id="tenant_demo",
+            change_id="chg_001",
+            target=WorkflowState.SCREENING,
+            expected_version=1,
+            trace_id="trace_001",
+            actor_type=ActorType.SERVICE,
+            actor_id="workflow-coordinator",
+            record_updates={"tenant_id": "tenant_other"},
+        )
+
+
 def test_invalid_transition_is_rejected_and_audited() -> None:
     repository = InMemoryChangeStateRepository()
     repository.add(make_change())

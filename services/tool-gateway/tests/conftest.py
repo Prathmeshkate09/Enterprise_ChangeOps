@@ -28,7 +28,7 @@ from changeops_sandbox.store import ConfigurationStore
 from changeops_tool_gateway.app import create_app
 from changeops_tool_gateway.errors import GatewayValidationError
 from changeops_tool_gateway.identity import HmacIdentityVerifier
-from changeops_tool_gateway.models import FieldPatchArguments
+from changeops_tool_gateway.models import ApprovalRequestRecord, FieldPatchArguments
 from changeops_tool_gateway.repository import InMemoryGovernanceRepository
 from fastapi.testclient import TestClient
 from pydantic import AnyUrl, JsonValue, ValidationError
@@ -70,6 +70,14 @@ class SandboxStoreExecutor:
             ),
         )
         return result.model_dump(mode="json")
+
+
+class RecordingCallbackNotifier:
+    def __init__(self) -> None:
+        self.records: list[ApprovalRequestRecord] = []
+
+    async def notify(self, record: ApprovalRequestRecord) -> None:
+        self.records.append(record)
 
 
 def build_plan() -> RemediationPlan:
@@ -169,12 +177,14 @@ def gateway_stack() -> dict[str, Any]:
         field_name="source_field",
     )
     executor = SandboxStoreExecutor(sandbox_store)
+    callback_notifier = RecordingCallbackNotifier()
     app = create_app(
         settings=Settings(app_env=AppEnvironment.SANDBOX),
         identity_verifier=verifier,
         governance_repository=governance,
         change_repository=changes,
         tool_executor=executor,
+        approval_callback_notifier=callback_notifier,
         clock=lambda: NOW,
     )
     tokens = {
@@ -212,6 +222,7 @@ def gateway_stack() -> dict[str, Any]:
         "changes": changes,
         "governance": governance,
         "executor": executor,
+        "callback_notifier": callback_notifier,
         "sandbox_store": sandbox_store,
         "tokens": tokens,
     }

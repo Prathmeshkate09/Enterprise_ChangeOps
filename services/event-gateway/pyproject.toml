@@ -1,0 +1,21 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "changeops-event-gateway"
+version = "0.1.0"
+description = "Authenticated transactional event ingestion and Pub/Sub publication"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "changeops-contracts",
+    "changeops-core",
+    "fastapi>=0.141.1,<0.142",
+    "google-cloud-firestore>=2.21.0,<3",
+    "google-cloud-pubsub>=2.31.0,<3",
+    "uvicorn>=0.35.0,<0.36",
+]
+
+[tool.uv.sources]
+changeops-contracts = { workspace = true }
+changeops-core = { workspace = true }

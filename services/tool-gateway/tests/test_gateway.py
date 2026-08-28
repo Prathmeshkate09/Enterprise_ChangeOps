@@ -2,8 +2,14 @@
 
 from typing import Any
 
+import httpx
+import pytest
+from changeops_tool_gateway.callback import HttpApprovalCallbackNotifier
+from changeops_tool_gateway.errors import ApprovalCallbackDeliveryError
 from conftest import approve_and_start, authorization, build_intent
 from fastapi.testclient import TestClient
+
+CALLBACK_TEST_KEY_MATERIAL = "phase6-callback-test-key-material-32bytes"
 
 
 def test_missing_authentication_fails_closed(gateway_stack: dict[str, Any]) -> None:
@@ -12,6 +18,67 @@ def test_missing_authentication_fails_closed(gateway_stack: dict[str, Any]) -> N
 
     assert response.status_code == 401
     assert response.json()["code"] == "AUTHENTICATION_REQUIRED"
+
+
+def test_approval_creation_and_decision_are_safe_to_retry(
+    gateway_stack: dict[str, Any],
+) -> None:
+    plan = gateway_stack["plan"]
+    tokens = gateway_stack["tokens"]
+    approval = {
+        "approval_id": "approval_phase5",
+        "plan": plan.model_dump(mode="json"),
+        "environment": "sandbox",
+        "scope": ["step_crm"],
+        "expires_at": "2026-08-28T10:30:00Z",
+    }
+    decision = {"expected_version": 1, "comment": "Approved for sandbox execution."}
+
+    with TestClient(gateway_stack["app"]) as client:
+        created = client.post(
+            "/v1/approvals",
+            headers=authorization(tokens["service"]),
+            json=approval,
+        )
+        creation_retry = client.post(
+            "/v1/approvals",
+            headers=authorization(tokens["service"]),
+            json=approval,
+        )
+        approved = client.post(
+            "/v1/approvals/approval_phase5/approve",
+            headers=authorization(tokens["approver"]),
+            json=decision,
+        )
+        callback_retry = client.post(
+            "/v1/approvals/approval_phase5/approve",
+            headers=authorization(tokens["approver"]),
+            json=decision,
+        )
+
+    assert created.status_code == 201, created.text
+    assert creation_retry.status_code == 201, creation_retry.text
+    assert approved.status_code == 200, approved.text
+    assert callback_retry.status_code == 200, callback_retry.text
+    assert approved.json()["version"] == 2
+    assert callback_retry.json() == approved.json()
+    notifier = gateway_stack["callback_notifier"]
+    assert [record.status.value for record in notifier.records] == ["APPROVED", "APPROVED"]
+
+
+@pytest.mark.asyncio
+async def test_callback_delivery_failure_is_explicit(gateway_stack: dict[str, Any]) -> None:
+    approve_and_start(gateway_stack)
+    record = gateway_stack["callback_notifier"].records[0]
+    transport = httpx.MockTransport(lambda _: httpx.Response(503))
+    async with httpx.AsyncClient(transport=transport) as client:
+        notifier = HttpApprovalCallbackNotifier(
+            "http://workflow-coordinator/internal/v1/approval-callbacks",
+            secret=CALLBACK_TEST_KEY_MATERIAL,
+            client=client,
+        )
+        with pytest.raises(ApprovalCallbackDeliveryError):
+            await notifier.notify(record)
 
 
 def test_unapproved_write_is_blocked_and_audited(gateway_stack: dict[str, Any]) -> None:

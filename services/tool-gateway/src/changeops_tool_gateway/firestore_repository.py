@@ -34,6 +34,7 @@ from changeops_tool_gateway.models import (
     ToolExecutionRecord,
     ToolExecutionStatus,
 )
+from changeops_tool_gateway.repository import same_approval_decision, same_approval_request
 
 _DOCUMENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$")
 
@@ -101,17 +102,26 @@ class FirestoreGovernanceRepository:
         transaction = self._client.transaction()
 
         @firestore.transactional
-        def create(active_transaction: Any) -> None:
+        def create(active_transaction: Any) -> ApprovalRequestRecord:
             plan_snapshot = plan_reference.get(transaction=active_transaction)
             approval_snapshot = approval_reference.get(transaction=active_transaction)
             approval_index_snapshot = approval_index_reference.get(transaction=active_transaction)
+            existing_plan: RemediationPlan | None = None
             if plan_snapshot.exists:
-                existing = _from_snapshot(plan_snapshot, RemediationPlan)
-                if calculate_plan_hash(existing) != record.plan_hash:
+                existing_plan = _from_snapshot(plan_snapshot, RemediationPlan)
+                if calculate_plan_hash(existing_plan) != record.plan_hash:
                     raise GatewayConflictError(
                         "A different plan already uses this plan identifier."
                     )
             if approval_snapshot.exists or approval_index_snapshot.exists:
+                if not (approval_snapshot.exists and approval_index_snapshot.exists):
+                    raise RuntimeError("Approval request indexes are inconsistent.")
+                existing_approval = _from_snapshot(approval_snapshot, ApprovalRequestRecord)
+                indexed_approval = _from_snapshot(approval_index_snapshot, ApprovalRequestRecord)
+                if existing_approval != indexed_approval:
+                    raise RuntimeError("Approval index diverged from the authoritative record.")
+                if existing_plan == plan and same_approval_request(existing_approval, record):
+                    return existing_approval
                 raise GatewayConflictError("Approval request identifier already exists.")
             if not plan_snapshot.exists:
                 active_transaction.create(
@@ -121,9 +131,9 @@ class FirestoreGovernanceRepository:
             document = _approval_document(record, server_requested_at=True)
             active_transaction.create(approval_reference, document)
             active_transaction.create(approval_index_reference, document)
+            return record
 
-        create(transaction)
-        return record
+        return cast(ApprovalRequestRecord, create(transaction))
 
     def get_plan(self, tenant_id: str, change_id: str, plan_id: str) -> RemediationPlan:
         snapshot = self._plan_reference(tenant_id, change_id, plan_id).get()
@@ -176,6 +186,15 @@ class FirestoreGovernanceRepository:
             if current != indexed:
                 raise RuntimeError("Approval index diverged from the authoritative record.")
             if current.status is not ApprovalRequestStatus.PENDING:
+                if same_approval_decision(
+                    current=current,
+                    target=target,
+                    expected_version=expected_version,
+                    decided_by=decided_by,
+                    decided_by_roles=decided_by_roles,
+                    comment=comment,
+                ):
+                    return current
                 raise GatewayConflictError("Approval request already has a final decision.")
             if current.version != expected_version:
                 raise GatewayConflictError(

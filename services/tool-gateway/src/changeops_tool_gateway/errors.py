@@ -105,3 +105,16 @@ class ToolAdapterError(GatewayError):
             ),
         )
         self.transient = transient
+
+
+class ApprovalCallbackDeliveryError(GatewayError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="APPROVAL_CALLBACK_UNAVAILABLE",
+            title="Approval callback unavailable",
+            detail=(
+                "The decision was stored, but the durable workflow callback could not be "
+                "delivered. Retry the identical decision request."
+            ),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )

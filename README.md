@@ -6,7 +6,7 @@ enterprise changes. The implementation follows the checked-in
 phase-gated architecture and keeps deterministic application code in control
 of workflow state, authorization, approvals, retries, and tool execution.
 
-**Phases 0 through 5 are complete.** The repository includes runnable control
+**Phases 0 through 7 are complete locally.** The repository includes a runnable control
 shells, versioned Python/TypeScript contracts, cross-runtime canonical plan
 hashing, audited deterministic transitions, tenant boundaries, and four
 independently deployable enterprise sandbox services. Firestore now holds
@@ -16,8 +16,17 @@ synthetic state to execute, verify, and roll back the `customer_id` to
 `customer_uuid` migration. Authenticated tool intents now pass through a
 deterministic policy engine, exact-plan approval, transactional idempotency,
 typed sandbox adapters, quotas, and audit enforcement; core results are not
-hardcoded. Production writes remain disabled. The repository tests and
-acceptance commands below reproduce the implemented behavior locally.
+hardcoded. Authenticated events now enter a transactional Firestore inbox,
+publish through the Pub/Sub emulator, and drive a restart-safe workflow that
+pauses for exact-plan approval, retries transient failures, executes the plan
+DAG, verifies each system independently, rolls back from hashed snapshots, and
+dead-letters permanent failures. The responsive Control Tower now renders measured
+tenant state, durable workflows, the seven-agent fleet, exact-plan approvals,
+closed tool registry, dead letters, and merged audit evidence. Its sandbox-only
+server actions start the golden change and record approval decisions while live
+SSE refreshes follow the execution to completion. Production writes remain
+disabled. The repository tests and acceptance commands below reproduce the
+implemented behavior locally.
 
 ## Prerequisites
 
@@ -51,6 +60,10 @@ python scripts/tasks.py persistence-check
 python scripts/tasks.py agent-fleet-check
 # Builds Firestore, the Tool Gateway, and sandboxes, then proves the Phase 5 gates:
 python scripts/tasks.py tool-gateway-check
+# Builds the Phase 6 stack and proves restart, retry, DLQ, and rollback behavior:
+python scripts/tasks.py workflow-check
+# Builds the full UI stack and proves the Phase 7 operational view and workflow:
+python scripts/tasks.py control-tower-check
 ```
 
 Start both development services until interrupted:
@@ -77,6 +90,9 @@ Endpoints:
 - Support sandbox: `http://127.0.0.1:8103`
 - Agent Fleet and OpenAPI docs: `http://127.0.0.1:8200` and `http://127.0.0.1:8200/docs`
 - Tool Gateway and OpenAPI docs: `http://127.0.0.1:8300` and `http://127.0.0.1:8300/docs`
+- Event Gateway and OpenAPI docs: `http://127.0.0.1:8400` and `http://127.0.0.1:8400/docs`
+- Workflow Coordinator and OpenAPI docs: `http://127.0.0.1:8500` and `http://127.0.0.1:8500/docs`
+- Local Pub/Sub emulator: `127.0.0.1:8086`
 
 On systems with GNU Make, the corresponding gates are `make setup`,
 `make lint`, `make test`, `make audit`, `make build`, `make smoke`, and
@@ -84,20 +100,23 @@ On systems with GNU Make, the corresponding gates are `make setup`,
 
 ## Docker Compose
 
-With Docker Desktop running, generate a process-local signing key:
+With Docker Desktop running, start the complete local application:
 
 ```powershell
-$env:TOOL_GATEWAY_AUTH_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose up -d --build --wait
 ```
 
-Then start Compose:
+Open the operational Control Tower:
 
 ```text
-docker compose up --build
+http://127.0.0.1:3000
 ```
 
-Compose starts the Firestore emulator, Control API, Control Tower, and all four
-functional enterprise sandbox services. In a second terminal, run both live
+Compose uses disclosed local-only signing defaults unless environment overrides
+are supplied. Never reuse those defaults outside the sandbox. It starts the
+Firestore and Pub/Sub emulators, Control API, Control Tower, Event Gateway,
+Workflow Coordinator, Tool Gateway, Agent Fleet, and all four functional
+enterprise sandbox services. In a second terminal, run the live
 acceptance gates:
 
 ```text
@@ -105,6 +124,8 @@ python scripts/tasks.py sandbox-check
 python scripts/tasks.py persistence-check
 python scripts/tasks.py agent-fleet-check
 python scripts/tasks.py tool-gateway-check
+python scripts/tasks.py workflow-check
+python scripts/tasks.py control-tower-check
 ```
 
 The scenario resets its tenant, snapshots every service, migrates and verifies
@@ -115,6 +136,11 @@ The persistence scenario creates a fresh tenant, seeds a change, restarts only
 the Control API container, reads the same Firestore-backed version, performs a
 transition, and resumes SSE strictly after the pre-restart event ID.
 
+The Control Tower scenario creates a fresh tenant and durable workflow, checks
+the server-rendered approval and security evidence, approves the exact plan,
+waits for completion, and confirms the completed tasks and audit evidence are
+rendered without relying on backend logs.
+
 ## Repository layout
 
 ```text
@@ -122,7 +148,8 @@ apps/control-tower/             Next.js operational UI
 services/control-api/           Tenant-facing FastAPI control API
 services/agent-fleet/           Seven-agent Google ADK analysis fleet
 services/tool-gateway/          Authenticated approval and typed execution boundary
-services/                       Future independently deployable control services
+services/event-gateway/         Authenticated transactional event ingestion
+services/workflow-coordinator/  Durable callback, DAG, retry, verification and rollback
 tool-services/                  Governed typed tool adapters
 enterprise-sandbox/             Four functional synthetic enterprise systems
 packages/changeops-core/        Shared validated config and structured logging

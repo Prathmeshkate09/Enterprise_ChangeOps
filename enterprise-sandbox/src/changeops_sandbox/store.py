@@ -31,6 +31,7 @@ from changeops_sandbox.models import (
     SnapshotRecord,
     SystemConfiguration,
     TransientFailureState,
+    VerificationFailureState,
 )
 
 
@@ -57,6 +58,7 @@ class ConfigurationStore[ConfigModel: SystemConfiguration]:
         self._snapshot_tenants: dict[str, str] = {}
         self._executions: dict[tuple[str, str], PatchResult] = {}
         self._transient_failures: dict[str, int] = {}
+        self._verification_failures: dict[str, int] = {}
 
     def get(self, tenant_id: str) -> ConfigModel:
         with self._lock:
@@ -153,10 +155,31 @@ class ConfigurationStore[ConfigModel: SystemConfiguration]:
             self._transient_failures[tenant_id] = count
             return TransientFailureState(remaining_failures=count)
 
+    def inject_verification_failures(
+        self,
+        tenant_id: str,
+        count: int,
+    ) -> VerificationFailureState:
+        with self._lock:
+            self._verification_failures[tenant_id] = count
+            return VerificationFailureState(remaining_failures=count)
+
+    def consume_verification_failure(self, tenant_id: str) -> bool:
+        with self._lock:
+            remaining = self._verification_failures.get(tenant_id, 0)
+            if remaining == 0:
+                return False
+            if remaining == 1:
+                self._verification_failures.pop(tenant_id, None)
+            else:
+                self._verification_failures[tenant_id] = remaining - 1
+            return True
+
     def reset(self, tenant_id: str) -> ResetResult:
         with self._lock:
             self._configurations[tenant_id] = self._copy_seed()
             self._transient_failures.pop(tenant_id, None)
+            self._verification_failures.pop(tenant_id, None)
             self._executions = {
                 key: value for key, value in self._executions.items() if key[0] != tenant_id
             }

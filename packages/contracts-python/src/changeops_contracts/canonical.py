@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from changeops_contracts.models import RemediationPlan
+from changeops_contracts.models import ChangeEvent, RemediationPlan
 
 
 def canonical_json(document: BaseModel | dict[str, Any]) -> str:
@@ -41,3 +41,29 @@ def calculate_plan_hash(plan: RemediationPlan) -> str:
     """Bind an approval or tool intent to the exact remediation plan document."""
 
     return sha256_digest(plan)
+
+
+def derive_change_id(event: ChangeEvent) -> str:
+    """Return the stable change identifier for an at-least-once source event."""
+
+    digest = sha256_digest(
+        {
+            "event_id": event.event_id,
+            "source": event.source.type,
+            "tenant_id": event.tenant_id,
+        }
+    )
+    return f"chg_{digest.removeprefix('sha256:')[:24]}"
+
+
+def derive_workflow_id(event: ChangeEvent) -> str:
+    """Return the stable workflow identifier for an at-least-once source event."""
+
+    digest = sha256_digest(
+        {
+            "correlation_id": event.correlation_id,
+            "event_id": event.event_id,
+            "tenant_id": event.tenant_id,
+        }
+    )
+    return f"wf_{digest.removeprefix('sha256:')[:24]}"

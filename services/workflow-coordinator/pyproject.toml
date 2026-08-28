@@ -1,0 +1,26 @@
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9"]
+build-backend = "uv_build"
+
+[project]
+name = "changeops-workflow-coordinator"
+version = "0.1.0"
+description = "Durable deterministic workflow, retry, DAG, verification, and rollback coordinator"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "changeops-contracts",
+    "changeops-core",
+    "changeops-persistence",
+    "changeops-tool-gateway",
+    "fastapi>=0.141.1,<0.142",
+    "google-cloud-firestore>=2.21.0,<3",
+    "google-cloud-pubsub>=2.31.0,<3",
+    "httpx>=0.28.1,<0.29",
+    "uvicorn>=0.35.0,<0.36",
+]
+
+[tool.uv.sources]
+changeops-contracts = { workspace = true }
+changeops-core = { workspace = true }
+changeops-persistence = { workspace = true }
+changeops-tool-gateway = { workspace = true }

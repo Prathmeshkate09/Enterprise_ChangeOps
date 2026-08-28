@@ -80,7 +80,9 @@ def lint() -> None:
             "packages/policy-engine/src",
             "services/agent-fleet/src",
             "services/control-api/src",
+            "services/event-gateway/src",
             "services/tool-gateway/src",
+            "services/workflow-coordinator/src",
             "scripts",
         ]
     )
@@ -229,6 +231,77 @@ def tool_gateway_check() -> None:
     )
 
 
+def workflow_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    docker = executable("docker")
+    scenario_environment = {
+        "AUTH_AUDIENCE": "enterprise-changeops-tool-gateway",
+        "EVENT_GATEWAY_WEBHOOK_SECRET": secrets.token_urlsafe(48),
+        "PHASE6_RUN_ID": uuid4().hex[:12],
+        "TOOL_GATEWAY_AUTH_SECRET": secrets.token_urlsafe(48),
+        "WORKFLOW_CALLBACK_SECRET": secrets.token_urlsafe(48),
+    }
+    run(
+        [
+            docker,
+            "compose",
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+            "pubsub-emulator",
+            "firestore-emulator",
+            "customer-api-registry",
+            "crm-sandbox",
+            "analytics-sandbox",
+            "support-sandbox",
+            "control-api",
+            "agent-fleet",
+            "tool-gateway",
+            "event-gateway",
+            "workflow-coordinator",
+        ],
+        environment=scenario_environment,
+    )
+    run(
+        [str(VENV_PYTHON), "scripts/phase6_scenario.py"],
+        environment=scenario_environment,
+    )
+
+
+def control_tower_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    docker = executable("docker")
+    scenario_environment = {
+        "AUTH_AUDIENCE": "enterprise-changeops-tool-gateway",
+        "CONTROL_TOWER_ENVIRONMENT": "sandbox",
+        "CONTROL_TOWER_SANDBOX_ACTIONS_ENABLED": "true",
+        "EVENT_GATEWAY_WEBHOOK_SECRET": secrets.token_urlsafe(48),
+        "PHASE7_RUN_ID": uuid4().hex[:12],
+        "PRODUCTION_WRITES_ENABLED": "false",
+        "TOOL_GATEWAY_AUTH_SECRET": secrets.token_urlsafe(48),
+        "WORKFLOW_CALLBACK_SECRET": secrets.token_urlsafe(48),
+    }
+    run(
+        [
+            docker,
+            "compose",
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+            "control-tower",
+        ],
+        environment=scenario_environment,
+    )
+    run(
+        [str(VENV_PYTHON), "scripts/phase7_scenario.py"],
+        environment=scenario_environment,
+    )
+
+
 def wait_for_health(
     url: str,
     *,
@@ -356,6 +429,8 @@ def main() -> None:
             "persistence-check",
             "agent-fleet-check",
             "tool-gateway-check",
+            "workflow-check",
+            "control-tower-check",
             "clean",
         ),
     )
@@ -371,6 +446,8 @@ def main() -> None:
         "persistence-check": persistence_check,
         "agent-fleet-check": agent_fleet_check,
         "tool-gateway-check": tool_gateway_check,
+        "workflow-check": workflow_check,
+        "control-tower-check": control_tower_check,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,

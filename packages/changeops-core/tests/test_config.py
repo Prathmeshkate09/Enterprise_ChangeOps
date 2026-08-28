@@ -11,6 +11,9 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.persistence_backend is PersistenceBackend.MEMORY
     assert settings.gemini_primary_model == "gemini-3.5-flash"
     assert settings.agent_model_mode is AgentModelMode.FAKE
+    assert settings.pubsub_change_topic == "changeops-change-events"
+    assert settings.workflow_max_attempts == 3
+    assert settings.control_api_base_url == "http://127.0.0.1:8000"
 
 
 def test_production_writes_fail_closed() -> None:

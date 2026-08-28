@@ -45,6 +45,11 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from changeops_tool_gateway.callback import (
+    ApprovalCallbackNotifier,
+    HttpApprovalCallbackNotifier,
+    NoopApprovalCallbackNotifier,
+)
 from changeops_tool_gateway.errors import (
     ApprovalRequiredError,
     AuthenticationError,
@@ -260,6 +265,7 @@ def create_app(
     policy_engine: PolicyEngine | None = None,
     tool_executor: ToolExecutor | None = None,
     quota_manager: ToolQuotaManager | None = None,
+    approval_callback_notifier: ApprovalCallbackNotifier | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
@@ -284,6 +290,19 @@ def create_app(
         }
     )
     quotas = quota_manager or ToolQuotaManager()
+    if approval_callback_notifier is not None:
+        callback_notifier = approval_callback_notifier
+    elif resolved.workflow_callback_url is not None:
+        if resolved.workflow_callback_secret is None:
+            raise ValueError(
+                "WORKFLOW_CALLBACK_SECRET is required when WORKFLOW_CALLBACK_URL is set."
+            )
+        callback_notifier = HttpApprovalCallbackNotifier(
+            resolved.workflow_callback_url,
+            secret=resolved.workflow_callback_secret,
+        )
+    else:
+        callback_notifier = NoopApprovalCallbackNotifier()
     configure_logging(resolved.log_level)
     logger = get_logger("tool-gateway")
 
@@ -409,16 +428,17 @@ def create_app(
             version=1,
         )
         stored = await _run_sync(governance.create_approval_request, record=record, plan=body.plan)
-        await _run_sync(
-            governance.record_audit,
-            _approval_audit(
-                identity=identity,
-                record=stored,
-                event_type="APPROVAL_REQUESTED",
-                summary="Exact-plan sandbox approval requested.",
-                now=created_at,
-            ),
-        )
+        if stored.requested_at == created_at:
+            await _run_sync(
+                governance.record_audit,
+                _approval_audit(
+                    identity=identity,
+                    record=stored,
+                    event_type="APPROVAL_REQUESTED",
+                    summary="Exact-plan sandbox approval requested.",
+                    now=created_at,
+                ),
+            )
         return stored
 
     @app.get("/v1/approvals", response_model=ApprovalListResponse, tags=["approvals"])
@@ -483,6 +503,7 @@ def create_app(
                 now=timestamp,
             ),
         )
+        await callback_notifier.notify(record)
         return record
 
     @app.post(

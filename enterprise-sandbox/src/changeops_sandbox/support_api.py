@@ -15,6 +15,8 @@ from changeops_sandbox.models import (
     SnapshotRecord,
     SupportConfiguration,
     VerificationCheck,
+    VerificationFailureRequest,
+    VerificationFailureState,
     VerificationRequest,
     VerificationResult,
 )
@@ -83,13 +85,18 @@ def create_app(store: ConfigurationStore[SupportConfiguration] | None = None) ->
         tenant_id: TenantId,
     ) -> VerificationResult:
         current = state.get(tenant_id)
-        field_matches = current.lookup_field == request.expected_field
+        injected_failure = state.consume_verification_failure(tenant_id)
+        field_matches = current.lookup_field == request.expected_field and not injected_failure
         healthy = current.status == "healthy"
         checks = (
             VerificationCheck(
                 name="lookup_field",
                 passed=field_matches,
-                detail=f"Support lookup field is {current.lookup_field}.",
+                detail=(
+                    "Injected support lookup verification failure."
+                    if injected_failure
+                    else f"Support lookup field is {current.lookup_field}."
+                ),
             ),
             VerificationCheck(
                 name="dependent_forms",
@@ -107,6 +114,17 @@ def create_app(store: ConfigurationStore[SupportConfiguration] | None = None) ->
             passed=all(check.passed for check in checks),
             checks=checks,
         )
+
+    @app.post(
+        "/v1/admin/verification-failures",
+        response_model=VerificationFailureState,
+        tags=["admin"],
+    )
+    async def inject_verification_failure(
+        request: VerificationFailureRequest,
+        tenant_id: TenantId,
+    ) -> VerificationFailureState:
+        return state.inject_verification_failures(tenant_id, request.count)
 
     @app.post("/v1/admin/reset", response_model=ResetResult, tags=["admin"])
     async def reset(tenant_id: TenantId) -> ResetResult:

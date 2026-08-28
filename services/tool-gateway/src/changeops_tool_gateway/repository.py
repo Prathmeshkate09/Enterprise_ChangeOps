@@ -34,6 +34,35 @@ from changeops_tool_gateway.models import (
 )
 
 
+def same_approval_request(current: ApprovalRequestRecord, candidate: ApprovalRequestRecord) -> bool:
+    """Compare the immutable approval scope while ignoring server creation time."""
+
+    ignored = {"requested_at"}
+    return current.model_dump(mode="python", exclude=ignored) == candidate.model_dump(
+        mode="python", exclude=ignored
+    )
+
+
+def same_approval_decision(
+    *,
+    current: ApprovalRequestRecord,
+    target: ApprovalRequestStatus,
+    expected_version: int,
+    decided_by: str,
+    decided_by_roles: tuple[UserRole, ...],
+    comment: str,
+) -> bool:
+    """Allow only the exact retry of an already committed approval decision."""
+
+    return (
+        current.status is target
+        and current.version == expected_version + 1
+        and current.decided_by == decided_by
+        and current.decided_by_roles == decided_by_roles
+        and current.comment == comment
+    )
+
+
 class GovernanceRepository(Protocol):
     def check_ready(self) -> None: ...
 
@@ -124,7 +153,10 @@ class InMemoryGovernanceRepository:
             existing_plan = self._plans.get(plan_key)
             if existing_plan is not None and calculate_plan_hash(existing_plan) != record.plan_hash:
                 raise GatewayConflictError("A different plan already uses this plan identifier.")
-            if approval_key in self._approvals:
+            existing_approval = self._approvals.get(approval_key)
+            if existing_approval is not None:
+                if existing_plan == plan and same_approval_request(existing_approval, record):
+                    return existing_approval
                 raise GatewayConflictError("Approval request identifier already exists.")
             self._plans[plan_key] = plan
             self._approvals[approval_key] = record
@@ -172,6 +204,15 @@ class InMemoryGovernanceRepository:
         with self._lock:
             current = self.get_approval_request(tenant_id, approval_id)
             if current.status is not ApprovalRequestStatus.PENDING:
+                if same_approval_decision(
+                    current=current,
+                    target=target,
+                    expected_version=expected_version,
+                    decided_by=decided_by,
+                    decided_by_roles=decided_by_roles,
+                    comment=comment,
+                ):
+                    return current
                 raise GatewayConflictError("Approval request already has a final decision.")
             if current.version != expected_version:
                 raise GatewayConflictError(

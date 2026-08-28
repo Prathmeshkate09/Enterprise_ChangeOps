@@ -27,7 +27,9 @@ members = [
     "packages/policy-engine",
     "services/agent-fleet",
     "services/control-api",
+    "services/event-gateway",
     "services/tool-gateway",
+    "services/workflow-coordinator",
 ]
 
 [tool.pytest.ini_options]
@@ -55,10 +57,13 @@ strict = true
 warn_unreachable = true
 pretty = true
 mypy_path = [
+    "scripts",
     "enterprise-sandbox/src",
     "packages/changeops-core/src",
     "packages/policy-engine/src",
     "services/agent-fleet/src",
     "services/control-api/src",
+    "services/event-gateway/src",
     "services/tool-gateway/src",
+    "services/workflow-coordinator/src",
 ]

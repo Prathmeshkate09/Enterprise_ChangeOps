@@ -176,6 +176,7 @@ class StateTransitionService:
         trace_id: str,
         actor_type: ActorType,
         actor_id: str,
+        record_updates: Mapping[str, object] | None = None,
     ) -> ChangeRecord:
         current = self._repository.get(tenant_id, change_id)
         transitioned_at = self._clock()
@@ -184,10 +185,24 @@ class StateTransitionService:
         if transitioned_at < current.updated_at:
             raise ValueError("State transition clock cannot move updated_at backwards.")
 
+        updates = dict(record_updates or {})
+        allowed_update_fields = {
+            "workflow_execution_id",
+            "plan_version",
+            "plan_hash",
+            "risk_level",
+        }
+        unsupported_fields = set(updates) - allowed_update_fields
+        if unsupported_fields:
+            raise ValueError(
+                "Unsupported transition record updates: " + ", ".join(sorted(unsupported_fields))
+            )
+
         input_document = {
             "change_id": change_id,
             "current": current.status,
             "expected_version": expected_version,
+            "record_updates": updates,
             "target": target,
             "tenant_id": tenant_id,
         }
@@ -213,6 +228,7 @@ class StateTransitionService:
             )
 
         updated_document = current.model_dump(mode="python")
+        updated_document.update(updates)
         updated_document.update(
             {
                 "status": target,

@@ -150,6 +150,14 @@ class TransientFailureState(SandboxModel):
     remaining_failures: int = Field(ge=0)
 
 
+class VerificationFailureRequest(SandboxModel):
+    count: int = Field(default=1, ge=1, le=3)
+
+
+class VerificationFailureState(SandboxModel):
+    remaining_failures: int = Field(ge=0)
+
+
 class CatalogActivationRequest(SandboxModel):
     version: NonEmptyStr
     idempotency_key: NonEmptyStr
