@@ -31,6 +31,7 @@ members = [
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
 cache_dir = ".cache/pytest"
+pythonpath = ["."]
 testpaths = ["enterprise-sandbox/tests", "packages", "services", "tests"]
 
 [tool.ruff]

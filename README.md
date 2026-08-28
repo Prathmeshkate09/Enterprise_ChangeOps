@@ -6,7 +6,7 @@ enterprise changes. The implementation follows the checked-in
 phase-gated architecture and keeps deterministic application code in control
 of workflow state, authorization, approvals, retries, and tool execution.
 
-**Phases 0 through 3 are complete.** The repository includes runnable control
+**Phases 0 through 4 are complete.** The repository includes runnable control
 shells, versioned Python/TypeScript contracts, cross-runtime canonical plan
 hashing, audited deterministic transitions, tenant boundaries, and four
 independently deployable enterprise sandbox services. Firestore now holds
@@ -47,6 +47,9 @@ python scripts/tasks.py sandbox-check
 python scripts/tasks.py persistence-check
 # Builds the four sandboxes and seven-agent ADK fleet, then runs its golden event:
 python scripts/tasks.py agent-fleet-check
+# Read and validate the cross-session repository context:
+python scripts/tasks.py context-show
+python scripts/tasks.py context-validate
 ```
 
 Start both development services until interrupted:
@@ -120,7 +123,16 @@ infrastructure/                 Terraform, Workflows and Cloud Build assets
 evaluations/                    Agent datasets, scorers and measured reports
 tests/                          Cross-service contract, integration, security and E2E tests
 docs/                           Plan, architecture decisions and operating documentation
+.context/                       Append-only verified cross-session context
 ```
+
+## Cross-session context
+
+Future coding sessions read `.context/CURRENT.md` before work and append one
+verified record to `.context/sessions.jsonl` before finishing. The context
+engine records decisions, changed files, exact test outcomes, blockers, and
+next steps while redacting common credential shapes. Live source, Git state,
+tests, and service responses always take precedence over recorded context.
 
 ## Security baseline
 

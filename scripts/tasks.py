@@ -192,6 +192,14 @@ def agent_fleet_check() -> None:
     run([str(VENV_PYTHON), "scripts/phase4_scenario.py"])
 
 
+def context_show() -> None:
+    run([sys.executable, "scripts/context_engine.py", "show"])
+
+
+def context_validate() -> None:
+    run([sys.executable, "scripts/context_engine.py", "validate"])
+
+
 def wait_for_health(
     url: str,
     *,
@@ -318,6 +326,8 @@ def main() -> None:
             "sandbox-check",
             "persistence-check",
             "agent-fleet-check",
+            "context-show",
+            "context-validate",
             "clean",
         ),
     )
@@ -332,6 +342,8 @@ def main() -> None:
         "sandbox-check": sandbox_check,
         "persistence-check": persistence_check,
         "agent-fleet-check": agent_fleet_check,
+        "context-show": context_show,
+        "context-validate": context_validate,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,
