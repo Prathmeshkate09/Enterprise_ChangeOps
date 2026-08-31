@@ -21,7 +21,15 @@ from changeops_contracts import (
     calculate_plan_hash,
     sha256_digest,
 )
-from changeops_core import PersistenceBackend, Settings, configure_logging, get_logger, get_settings
+from changeops_core import (
+    PersistenceBackend,
+    ServiceAuthProvider,
+    Settings,
+    build_service_auth_provider,
+    configure_logging,
+    get_logger,
+    get_settings,
+)
 from changeops_persistence import (
     ChangeNotFoundError,
     ChangeStateRepository,
@@ -266,6 +274,7 @@ def create_app(
     tool_executor: ToolExecutor | None = None,
     quota_manager: ToolQuotaManager | None = None,
     approval_callback_notifier: ApprovalCallbackNotifier | None = None,
+    service_auth_provider: ServiceAuthProvider | None = None,
     clock: Callable[[], datetime] | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
@@ -282,12 +291,14 @@ def create_app(
     changes = change_repository or _build_change_repository(resolved)
     registry = tool_registry or build_default_tool_registry()
     policy = policy_engine or PolicyEngine()
+    service_auth = service_auth_provider or build_service_auth_provider(resolved)
     executor = tool_executor or HttpToolExecutor(
         {
             "crm": resolved.crm_base_url,
             "analytics": resolved.analytics_base_url,
             "support": resolved.support_base_url,
-        }
+        },
+        service_auth=service_auth,
     )
     quotas = quota_manager or ToolQuotaManager()
     if approval_callback_notifier is not None:
@@ -300,6 +311,7 @@ def create_app(
         callback_notifier = HttpApprovalCallbackNotifier(
             resolved.workflow_callback_url,
             secret=resolved.workflow_callback_secret,
+            service_auth=service_auth,
         )
     else:
         callback_notifier = NoopApprovalCallbackNotifier()

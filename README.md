@@ -6,7 +6,7 @@ enterprise changes. The implementation follows the checked-in
 phase-gated architecture and keeps deterministic application code in control
 of workflow state, authorization, approvals, retries, and tool execution.
 
-**Phases 0 through 8 are complete locally; Phase 8 also has a reproducible managed-cloud gate.**
+**Phases 0 through 9 are complete; Phase 9 deploys the full private managed sandbox.**
 The repository includes runnable control
 shells, versioned Python/TypeScript contracts, cross-runtime canonical plan
 hashing, audited deterministic transitions, tenant boundaries, and four
@@ -73,7 +73,37 @@ python scripts/tasks.py control-tower-check
 python scripts/tasks.py managed-governance-check
 # Calls the real configured Google Cloud governance resources using ADC:
 python scripts/tasks.py managed-cloud-check
+# Verifies all ten private Cloud Run services and authenticated health endpoints:
+python scripts/tasks.py managed-runtime-check
 ```
+
+## Private managed sandbox
+
+Phase 9 builds the ten runtime images with `deploy/cloudbuild-managed-runtime.yaml` and deploys
+them with keyless service identities, Secret Manager, Firestore, and Pub/Sub:
+
+```powershell
+.\deploy\phase9-managed-runtime.ps1 `
+  -Project enterprise-changeops `
+  -Region us-central1 `
+  -Tag phase9-20260831-03
+python scripts/tasks.py managed-runtime-check
+```
+
+No service grants unauthenticated access. Open the managed Control Tower through your authenticated
+Google Cloud session, leave the command running, and browse to `http://127.0.0.1:3000`:
+
+```powershell
+gcloud run services proxy changeops-control-tower `
+  --project enterprise-changeops `
+  --region us-central1 `
+  --port 3000
+```
+
+The managed sandbox keeps one Event Gateway, one Workflow Coordinator, and one instance of each
+synthetic enterprise service running. Those six instances incur ongoing cost. Synthetic enterprise state can reset
+when a revision restarts; durable control, workflow, idempotency, and audit state remains in
+Firestore. Production writes remain disabled.
 
 Start both development services until interrupted:
 

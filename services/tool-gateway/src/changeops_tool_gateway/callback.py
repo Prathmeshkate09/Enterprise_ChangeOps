@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Protocol
 
 import httpx
+from changeops_core import (
+    NoopServiceAuthProvider,
+    ServiceAuthenticationError,
+    ServiceAuthProvider,
+)
 
 from changeops_tool_gateway.errors import ApprovalCallbackDeliveryError
 from changeops_tool_gateway.models import ApprovalRequestRecord
@@ -26,10 +31,12 @@ class HttpApprovalCallbackNotifier:
         *,
         secret: str,
         client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
     ) -> None:
         self._endpoint = endpoint
         self._secret = secret
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     async def notify(self, record: ApprovalRequestRecord) -> None:
         if record.decided_at is None:
@@ -37,9 +44,13 @@ class HttpApprovalCallbackNotifier:
         client = self._client or httpx.AsyncClient(timeout=30)
         close_client = self._client is None
         try:
+            platform_headers = await self._service_auth.headers(self._endpoint)
             response = await client.post(
                 self._endpoint,
-                headers={"X-Workflow-Callback-Secret": self._secret},
+                headers={
+                    "X-Workflow-Callback-Secret": self._secret,
+                    **platform_headers,
+                },
                 json={
                     "tenant_id": record.tenant_id,
                     "change_id": record.change_id,
@@ -54,7 +65,7 @@ class HttpApprovalCallbackNotifier:
                 raise ApprovalCallbackDeliveryError
         except ApprovalCallbackDeliveryError:
             raise
-        except (httpx.HTTPError, OSError) as error:
+        except (httpx.HTTPError, OSError, ServiceAuthenticationError, ValueError) as error:
             raise ApprovalCallbackDeliveryError from error
         finally:
             if close_client:

@@ -1,0 +1,43 @@
+steps:
+  - &agent-fleet
+    name: gcr.io/cloud-builders/docker
+    env: [DOCKER_BUILDKIT=1]
+    args: [build, --file, services/agent-fleet/Dockerfile, --tag, '${_REGISTRY}/agent-fleet:${_TAG}', .]
+  - <<: *agent-fleet
+    args: [build, --file, services/control-api/Dockerfile, --tag, '${_REGISTRY}/control-api:${_TAG}', .]
+  - <<: *agent-fleet
+    args: [build, --file, services/event-gateway/Dockerfile, --tag, '${_REGISTRY}/event-gateway:${_TAG}', .]
+  - <<: *agent-fleet
+    args: [build, --file, services/tool-gateway/Dockerfile, --tag, '${_REGISTRY}/tool-gateway:${_TAG}', .]
+  - <<: *agent-fleet
+    args: [build, --file, services/workflow-coordinator/Dockerfile, --tag, '${_REGISTRY}/workflow-coordinator:${_TAG}', .]
+  - <<: *agent-fleet
+    args: [build, --file, apps/control-tower/Dockerfile, --tag, '${_REGISTRY}/control-tower:${_TAG}', .]
+  - <<: *agent-fleet
+    args:
+      [build, --file, enterprise-sandbox/Dockerfile, --build-arg, SANDBOX_MODULE=changeops_sandbox.catalog_api, --tag, '${_REGISTRY}/catalog-sandbox:${_TAG}', .]
+  - <<: *agent-fleet
+    args:
+      [build, --file, enterprise-sandbox/Dockerfile, --build-arg, SANDBOX_MODULE=changeops_sandbox.crm_api, --tag, '${_REGISTRY}/crm-sandbox:${_TAG}', .]
+  - <<: *agent-fleet
+    args:
+      [build, --file, enterprise-sandbox/Dockerfile, --build-arg, SANDBOX_MODULE=changeops_sandbox.analytics_api, --tag, '${_REGISTRY}/analytics-sandbox:${_TAG}', .]
+  - <<: *agent-fleet
+    args:
+      [build, --file, enterprise-sandbox/Dockerfile, --build-arg, SANDBOX_MODULE=changeops_sandbox.support_api, --tag, '${_REGISTRY}/support-sandbox:${_TAG}', .]
+images:
+  - '${_REGISTRY}/agent-fleet:${_TAG}'
+  - '${_REGISTRY}/control-api:${_TAG}'
+  - '${_REGISTRY}/event-gateway:${_TAG}'
+  - '${_REGISTRY}/tool-gateway:${_TAG}'
+  - '${_REGISTRY}/workflow-coordinator:${_TAG}'
+  - '${_REGISTRY}/control-tower:${_TAG}'
+  - '${_REGISTRY}/catalog-sandbox:${_TAG}'
+  - '${_REGISTRY}/crm-sandbox:${_TAG}'
+  - '${_REGISTRY}/analytics-sandbox:${_TAG}'
+  - '${_REGISTRY}/support-sandbox:${_TAG}'
+logsBucket: '${_LOGS_BUCKET}'
+timeout: 3600s
+options:
+  logging: GCS_ONLY
+  machineType: E2_HIGHCPU_8

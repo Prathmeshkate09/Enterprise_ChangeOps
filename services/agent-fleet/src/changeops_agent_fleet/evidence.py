@@ -11,6 +11,11 @@ from typing import Any, Protocol
 
 import httpx
 from changeops_contracts import ChangeEvent, EvidenceItem, EvidenceTrust, sha256_digest
+from changeops_core import (
+    NoopServiceAuthProvider,
+    ServiceAuthenticationError,
+    ServiceAuthProvider,
+)
 
 
 class EvidenceUnavailableError(RuntimeError):
@@ -30,10 +35,12 @@ class HttpEvidenceProvider:
         *,
         timeout_seconds: float = 5.0,
         client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
     ) -> None:
         self._service_urls = {name: url.rstrip("/") for name, url in service_urls.items()}
         self._timeout = timeout_seconds
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     async def collect(self, event: ChangeEvent) -> tuple[EvidenceItem, ...]:
         headers = {"X-Tenant-ID": event.tenant_id}
@@ -52,11 +59,7 @@ class HttpEvidenceProvider:
         try:
             responses = await asyncio.gather(
                 *(
-                    client.get(
-                        f"{self._service_urls[service]}{path}",
-                        headers=headers,
-                        params=params,
-                    )
+                    self._get(client, service, path, headers=headers, params=params)
                     for _, service, path, params in requests
                 )
             )
@@ -78,11 +81,28 @@ class HttpEvidenceProvider:
                 )
             evidence.append(policy_evidence(event.tenant_id, observed_at))
             return tuple(evidence)
-        except (httpx.HTTPError, KeyError, ValueError) as error:
+        except (httpx.HTTPError, KeyError, ServiceAuthenticationError, ValueError) as error:
             raise EvidenceUnavailableError("authoritative evidence collection failed") from error
         finally:
             if owns_client:
                 await client.aclose()
+
+    async def _get(
+        self,
+        client: httpx.AsyncClient,
+        service: str,
+        path: str,
+        *,
+        headers: Mapping[str, str],
+        params: Mapping[str, str] | None,
+    ) -> httpx.Response:
+        base_url = self._service_urls[service]
+        platform_headers = await self._service_auth.headers(base_url)
+        return await client.get(
+            f"{base_url}{path}",
+            headers={**headers, **platform_headers},
+            params=params,
+        )
 
 
 class StaticEvidenceProvider:

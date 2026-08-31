@@ -92,6 +92,7 @@ def create_app(
     event_publisher = publisher or PubSubEventPublisher(
         resolved.google_cloud_project or "",
         resolved.pubsub_change_topic,
+        manage_resources=resolved.pubsub_manage_resources,
     )
     verifier = WebhookSignatureVerifier(resolved.event_gateway_webhook_secret)
     limiter = TenantEventRateLimiter(resolved.event_rate_limit_per_minute)

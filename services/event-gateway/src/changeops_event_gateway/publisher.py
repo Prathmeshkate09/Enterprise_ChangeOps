@@ -18,11 +18,15 @@ class EventPublisher(Protocol):
 
 
 class PubSubEventPublisher:
-    def __init__(self, project: str, topic_id: str) -> None:
+    def __init__(self, project: str, topic_id: str, *, manage_resources: bool = True) -> None:
         self._client = pubsub_v1.PublisherClient()
         self._topic_path = self._client.topic_path(project, topic_id)
+        self._manage_resources = manage_resources
 
     def ensure_ready(self) -> None:
+        if not self._manage_resources:
+            self.check_ready()
+            return
         try:
             self._client.create_topic(request={"name": self._topic_path})
         except AlreadyExists:

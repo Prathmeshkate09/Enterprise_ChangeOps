@@ -45,6 +45,7 @@ class PubSubWorkflowSubscriber:
         dead_letter_topic_id: str,
         dead_letter_subscription_id: str,
         engine: WorkflowEngine,
+        manage_resources: bool = True,
     ) -> None:
         self._publisher = pubsub_v1.PublisherClient()
         self._subscriber = pubsub_v1.SubscriberClient()
@@ -55,11 +56,15 @@ class PubSubWorkflowSubscriber:
             project, dead_letter_subscription_id
         )
         self._engine = engine
+        self._manage_resources = manage_resources
         self._logger = get_logger("workflow-subscriber")
         self._streaming_future: object | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def ensure_ready(self) -> None:
+        if not self._manage_resources:
+            self.check_ready()
+            return
         for topic in (self._topic, self._dead_letter_topic):
             try:
                 self._publisher.create_topic(request={"name": topic})

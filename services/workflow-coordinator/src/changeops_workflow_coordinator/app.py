@@ -8,7 +8,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from changeops_core import PersistenceBackend, Settings, configure_logging, get_settings
+from changeops_core import (
+    PersistenceBackend,
+    ServiceAuthProvider,
+    Settings,
+    build_service_auth_provider,
+    configure_logging,
+    get_settings,
+)
 from changeops_persistence import (
     ChangeStateRepository,
     FirestoreChangeStateRepository,
@@ -70,30 +77,34 @@ def create_app(
     change_repository: ChangeStateRepository | None = None,
     engine: WorkflowEngine | None = None,
     subscriber: WorkflowSubscriber | None = None,
+    service_auth_provider: ServiceAuthProvider | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     if resolved.workflow_callback_secret is None:
         raise ValueError("WORKFLOW_CALLBACK_SECRET is required.")
     workflows = workflow_repository or _workflow_repository(resolved)
     changes = change_repository or _change_repository(resolved)
+    service_auth = service_auth_provider or build_service_auth_provider(resolved)
     if engine is None:
         if resolved.tool_gateway_auth_secret is None or resolved.auth_audience is None:
             raise ValueError("TOOL_GATEWAY_AUTH_SECRET and AUTH_AUDIENCE are required.")
         engine = WorkflowEngine(
             workflows=workflows,
             changes=changes,
-            fleet=FleetClient(resolved.agent_fleet_base_url),
+            fleet=FleetClient(resolved.agent_fleet_base_url, service_auth=service_auth),
             gateway=GatewayClient(
                 resolved.tool_gateway_base_url,
                 identity_secret=resolved.tool_gateway_auth_secret,
                 audience=resolved.auth_audience,
+                service_auth=service_auth,
             ),
             sandboxes=SandboxClient(
                 {
                     "crm": resolved.crm_base_url,
                     "analytics": resolved.analytics_base_url,
                     "support": resolved.support_base_url,
-                }
+                },
+                service_auth=service_auth,
             ),
             retry_policy=RetryPolicy(
                 maximum_attempts=resolved.workflow_max_attempts,
@@ -110,6 +121,7 @@ def create_app(
             dead_letter_topic_id=resolved.pubsub_dead_letter_topic,
             dead_letter_subscription_id=resolved.pubsub_dead_letter_subscription,
             engine=engine,
+            manage_resources=resolved.pubsub_manage_resources,
         )
     configure_logging(resolved.log_level)
 

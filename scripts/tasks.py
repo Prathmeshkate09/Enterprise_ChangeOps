@@ -333,6 +333,12 @@ def managed_cloud_check() -> None:
     run([str(VENV_PYTHON), "scripts/phase8_managed_cloud_check.py"])
 
 
+def managed_runtime_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    run([str(VENV_PYTHON), "scripts/phase9_managed_runtime_check.py"])
+
+
 def wait_for_health(
     url: str,
     *,
@@ -464,6 +470,7 @@ def main() -> None:
             "control-tower-check",
             "managed-governance-check",
             "managed-cloud-check",
+            "managed-runtime-check",
             "clean",
         ),
     )
@@ -483,6 +490,7 @@ def main() -> None:
         "control-tower-check": control_tower_check,
         "managed-governance-check": managed_governance_check,
         "managed-cloud-check": managed_cloud_check,
+        "managed-runtime-check": managed_runtime_check,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,

@@ -44,6 +44,13 @@ class AgentIdentityMode(StrEnum):
     SERVICE_ACCOUNT = "service_account"
 
 
+class ServiceAuthMode(StrEnum):
+    """Authentication applied to private service-to-service HTTP requests."""
+
+    NONE = "none"
+    GOOGLE_CLOUD = "google_cloud"
+
+
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables.
 
@@ -192,6 +199,10 @@ class Settings(BaseSettings):
         default=PersistenceBackend.MEMORY,
         validation_alias="PERSISTENCE_BACKEND",
     )
+    service_auth_mode: ServiceAuthMode = Field(
+        default=ServiceAuthMode.NONE,
+        validation_alias="SERVICE_AUTH_MODE",
+    )
 
     google_cloud_project: str | None = Field(default=None, validation_alias="GOOGLE_CLOUD_PROJECT")
     google_cloud_location: str | None = Field(
@@ -234,6 +245,10 @@ class Settings(BaseSettings):
         default="changeops-change-events-dlq-inspection",
         min_length=3,
         validation_alias="PUBSUB_DEAD_LETTER_SUBSCRIPTION",
+    )
+    pubsub_manage_resources: bool = Field(
+        default=True,
+        validation_alias="PUBSUB_MANAGE_RESOURCES",
     )
     workflow_name: str | None = Field(default=None, validation_alias="WORKFLOW_NAME")
     artifact_bucket: str | None = Field(default=None, validation_alias="ARTIFACT_BUCKET")

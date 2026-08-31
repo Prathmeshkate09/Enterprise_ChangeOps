@@ -81,6 +81,33 @@ async def test_callback_delivery_failure_is_explicit(gateway_stack: dict[str, An
             await notifier.notify(record)
 
 
+@pytest.mark.asyncio
+async def test_callback_preserves_secret_with_platform_authorization(
+    gateway_stack: dict[str, Any],
+) -> None:
+    approve_and_start(gateway_stack)
+    record = gateway_stack["callback_notifier"].records[0]
+
+    class PlatformAuth:
+        async def headers(self, audience: str) -> dict[str, str]:
+            assert audience == "https://workflow.example.run.app/internal/v1/approval-callbacks"
+            return {"X-Serverless-Authorization": "Bearer platform-token"}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["X-Workflow-Callback-Secret"] == CALLBACK_TEST_KEY_MATERIAL
+        assert request.headers["X-Serverless-Authorization"] == "Bearer platform-token"
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        notifier = HttpApprovalCallbackNotifier(
+            "https://workflow.example.run.app/internal/v1/approval-callbacks",
+            secret=CALLBACK_TEST_KEY_MATERIAL,
+            client=client,
+            service_auth=PlatformAuth(),
+        )
+        await notifier.notify(record)
+
+
 def test_unapproved_write_is_blocked_and_audited(gateway_stack: dict[str, Any]) -> None:
     approve_and_start(gateway_stack)
     intent = build_intent(gateway_stack["plan"])

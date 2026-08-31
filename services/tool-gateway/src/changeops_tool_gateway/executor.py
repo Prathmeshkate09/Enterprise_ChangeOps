@@ -6,6 +6,11 @@ from typing import ClassVar, Protocol, cast
 
 import httpx
 from changeops_contracts import ToolIntent
+from changeops_core import (
+    NoopServiceAuthProvider,
+    ServiceAuthenticationError,
+    ServiceAuthProvider,
+)
 from changeops_policy_engine import ToolRegistration
 from pydantic import JsonValue, ValidationError
 
@@ -40,11 +45,13 @@ class HttpToolExecutor:
         base_urls: dict[str, str],
         *,
         client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
     ) -> None:
         if set(base_urls) != {"crm", "analytics", "support"}:
             raise ValueError("Tool executor requires exactly the three sandbox service URLs.")
         self._base_urls = {name: value.rstrip("/") for name, value in base_urls.items()}
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     def validate_arguments(self, intent: ToolIntent) -> FieldPatchArguments:
         if intent.tool_name not in self._SERVICE_BY_TOOL:
@@ -74,9 +81,15 @@ class HttpToolExecutor:
         client = self._client or httpx.AsyncClient(timeout=registration.timeout_seconds)
         close_client = self._client is None
         try:
+            base_url = self._base_urls[service]
+            platform_headers = await self._service_auth.headers(base_url)
             response = await client.post(
-                f"{self._base_urls[service]}/v1/patches/apply",
-                headers={"X-Tenant-ID": intent.tenant_id, "X-Request-ID": request_id},
+                f"{base_url}/v1/patches/apply",
+                headers={
+                    "X-Tenant-ID": intent.tenant_id,
+                    "X-Request-ID": request_id,
+                    **platform_headers,
+                },
                 json=payload,
                 timeout=registration.timeout_seconds,
             )
@@ -101,7 +114,7 @@ class HttpToolExecutor:
             return cast(dict[str, JsonValue], result.model_dump(mode="json"))
         except ToolAdapterError:
             raise
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except (httpx.TimeoutException, httpx.NetworkError, ServiceAuthenticationError) as error:
             raise ToolAdapterError(
                 code="TRANSIENT",
                 detail="The registered sandbox tool is temporarily unavailable.",

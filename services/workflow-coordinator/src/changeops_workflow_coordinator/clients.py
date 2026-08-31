@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Annotated, ClassVar, Literal, cast
+from urllib.parse import urlsplit
 
 import httpx
 from changeops_contracts import (
@@ -15,6 +16,11 @@ from changeops_contracts import (
     RemediationStep,
     ToolIntent,
     sha256_digest,
+)
+from changeops_core import (
+    NoopServiceAuthProvider,
+    ServiceAuthenticationError,
+    ServiceAuthProvider,
 )
 from changeops_policy_engine import IdentityKind
 from changeops_tool_gateway.identity import HmacIdentityVerifier
@@ -56,9 +62,16 @@ def _response_error(response: httpx.Response) -> DependencyCallError:
 
 
 class FleetClient:
-    def __init__(self, base_url: str, *, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     async def analyze(
         self, *, change_id: str, event: ChangeEvent, request_id: str
@@ -66,9 +79,14 @@ class FleetClient:
         client = self._client or httpx.AsyncClient(timeout=60)
         close_client = self._client is None
         try:
+            platform_headers = await self._service_auth.headers(self._base_url)
             response = await client.post(
                 f"{self._base_url}/v1/analyses",
-                headers={"X-Tenant-ID": event.tenant_id, "X-Request-ID": request_id},
+                headers={
+                    "X-Tenant-ID": event.tenant_id,
+                    "X-Request-ID": request_id,
+                    **platform_headers,
+                },
                 json=FleetAnalysisRequest(change_id=change_id, event=event).model_dump(mode="json"),
             )
             if response.status_code >= 400:
@@ -76,7 +94,7 @@ class FleetClient:
             return FleetAnalysisResult.model_validate(response.json())
         except DependencyCallError:
             raise
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except (httpx.TimeoutException, httpx.NetworkError, ServiceAuthenticationError) as error:
             raise DependencyCallError("FLEET_UNAVAILABLE", transient=True) from error
         except (ValueError, ValidationError) as error:
             raise DependencyCallError("FLEET_INVALID_RESPONSE", transient=False) from error
@@ -93,10 +111,12 @@ class GatewayClient:
         identity_secret: str,
         audience: str,
         client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._issuer = HmacIdentityVerifier(identity_secret, audience)
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     def _token(self, *, subject: str, tenant_id: str, kind: IdentityKind) -> str:
         return self._issuer.issue(
@@ -190,12 +210,14 @@ class GatewayClient:
         client = self._client or httpx.AsyncClient(timeout=30)
         close_client = self._client is None
         try:
+            platform_headers = await self._service_auth.headers(self._base_url)
             response = await client.request(
                 method,
                 f"{self._base_url}{path}",
                 headers={
                     "Authorization": f"Bearer {token}",
                     "X-Request-ID": request_id,
+                    **platform_headers,
                 },
                 json=payload,
             )
@@ -204,7 +226,7 @@ class GatewayClient:
             return output_type.model_validate(response.json())
         except DependencyCallError:
             raise
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except (httpx.TimeoutException, httpx.NetworkError, ServiceAuthenticationError) as error:
             raise DependencyCallError("TOOL_GATEWAY_UNAVAILABLE", transient=True) from error
         except (ValueError, ValidationError) as error:
             raise DependencyCallError("TOOL_GATEWAY_INVALID_RESPONSE", transient=False) from error
@@ -264,12 +286,17 @@ class SandboxClient:
     }
 
     def __init__(
-        self, base_urls: dict[str, str], *, client: httpx.AsyncClient | None = None
+        self,
+        base_urls: dict[str, str],
+        *,
+        client: httpx.AsyncClient | None = None,
+        service_auth: ServiceAuthProvider | None = None,
     ) -> None:
         if set(base_urls) != {"crm", "analytics", "support"}:
             raise ValueError("Sandbox client requires exactly CRM, Analytics, and Support URLs.")
         self._base_urls = {name: url.rstrip("/") for name, url in base_urls.items()}
         self._client = client
+        self._service_auth = service_auth or NoopServiceAuthProvider()
 
     def system_for_step(self, step: RemediationStep) -> Literal["crm", "analytics", "support"]:
         system = self._SERVICE_BY_TOOL.get(step.tool_name)
@@ -351,10 +378,17 @@ class SandboxClient:
         client = self._client or httpx.AsyncClient(timeout=15)
         close_client = self._client is None
         try:
+            parsed_url = urlsplit(url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+            platform_headers = await self._service_auth.headers(base_url)
             response = await client.request(
                 method,
                 url,
-                headers={"X-Tenant-ID": tenant_id, "X-Request-ID": request_id},
+                headers={
+                    "X-Tenant-ID": tenant_id,
+                    "X-Request-ID": request_id,
+                    **platform_headers,
+                },
                 json=payload,
             )
             if response.status_code >= 400:
@@ -362,7 +396,7 @@ class SandboxClient:
             return response
         except DependencyCallError:
             raise
-        except (httpx.TimeoutException, httpx.NetworkError) as error:
+        except (httpx.TimeoutException, httpx.NetworkError, ServiceAuthenticationError) as error:
             raise DependencyCallError("SANDBOX_UNAVAILABLE", transient=True) from error
         finally:
             if close_client:

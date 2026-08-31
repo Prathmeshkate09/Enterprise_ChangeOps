@@ -13,11 +13,13 @@ import type {
   ToolRegistration,
   WorkflowExecution,
 } from "./changeops-types";
+import { serviceAuthHeaders } from "./service-auth";
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const REQUEST_TIMEOUT_MS = 6_000;
 const CHANGE_PROJECTION_TIMEOUT_MS = 10_000;
 const CHANGE_PROJECTION_RETRY_MS = 150;
+const APPROVAL_CALLBACK_RETRY_MS = 500;
 
 type UpstreamName =
   | "Agent Fleet"
@@ -127,8 +129,12 @@ async function requestJson<T>(
 ): Promise<T> {
   let response: Response;
   try {
+    const headers = new Headers(init.headers);
+    const platformHeaders = await serviceAuthHeaders(url);
+    for (const [name, value] of Object.entries(platformHeaders)) headers.set(name, value);
     response = await fetch(url, {
       ...init,
+      headers,
       cache: "no-store",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -472,15 +478,23 @@ export async function submitApprovalDecision(input: {
   }
   if (current.status !== "PENDING") throw new Error("This approval is no longer pending.");
 
-  await requestJson<ApprovalRequest>(
-    "Tool Gateway",
-    `${toolGatewayBaseUrl()}/v1/approvals/${encodeURIComponent(input.approvalId)}/${input.decision}`,
-    {
+  const decisionUrl = `${toolGatewayBaseUrl()}/v1/approvals/${encodeURIComponent(input.approvalId)}/${input.decision}`;
+  const decisionRequest = () =>
+    requestJson<ApprovalRequest>("Tool Gateway", decisionUrl, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ expected_version: input.expectedVersion, comment }),
-    },
-  );
+    });
+  try {
+    await decisionRequest();
+  } catch (error) {
+    if (!(error instanceof UpstreamError) || error.status !== 503) throw error;
+    // The gateway stores the decision before delivering its workflow callback.
+    // Its exact-retry contract makes this safe while preventing a divergent
+    // second decision from being accepted.
+    await new Promise((resolve) => setTimeout(resolve, APPROVAL_CALLBACK_RETRY_MS));
+    await decisionRequest();
+  }
 }
 
 export function safeActionError(error: unknown, fallback: string): string {

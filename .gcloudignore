@@ -8,6 +8,7 @@ AGENTS.md
 .env.*
 .cache/
 .mypy_cache/
+.npm-cache/
 .pytest_cache/
 .ruff_cache/
 .test-tmp/
@@ -20,7 +21,6 @@ AGENTS.md
 **/coverage/
 **/*.tsbuildinfo
 artifacts/
-apps/
 data/
 demo/
 docs/

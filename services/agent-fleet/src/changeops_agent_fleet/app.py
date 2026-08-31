@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Annotated
 
 from changeops_contracts import AgentRegistration, FleetAnalysisRequest, FleetAnalysisResult
-from changeops_core import Settings, configure_logging, get_settings
+from changeops_core import (
+    ServiceAuthProvider,
+    Settings,
+    build_service_auth_provider,
+    configure_logging,
+    get_settings,
+)
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -38,16 +44,19 @@ def create_app(
     settings: Settings | None = None,
     evidence_provider: EvidenceProvider | None = None,
     governance: GovernanceService | None = None,
+    service_auth_provider: ServiceAuthProvider | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level)
+    service_auth = service_auth_provider or build_service_auth_provider(resolved)
     provider = evidence_provider or HttpEvidenceProvider(
         {
             "catalog": resolved.catalog_base_url,
             "crm": resolved.crm_base_url,
             "analytics": resolved.analytics_base_url,
             "support": resolved.support_base_url,
-        }
+        },
+        service_auth=service_auth,
     )
     runtime_url = resolved.agent_fleet_base_url
     governance_service = governance or build_governance(resolved)

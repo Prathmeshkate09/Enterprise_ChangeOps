@@ -1,4 +1,5 @@
 import { controlApiBaseUrl, isValidIdentifier } from "@/lib/changeops-data";
+import { serviceAuthHeaders } from "@/lib/service-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export async function GET(request: Request): Promise<Response> {
 
   let upstream: Response;
   try {
+    const platformHeaders = await serviceAuthHeaders(controlApiBaseUrl());
+    for (const [name, value] of Object.entries(platformHeaders)) headers.set(name, value);
     upstream = await fetch(
       `${controlApiBaseUrl()}/v1/changes/${encodeURIComponent(changeId)}/stream?follow=true`,
       { cache: "no-store", headers, signal: request.signal },
