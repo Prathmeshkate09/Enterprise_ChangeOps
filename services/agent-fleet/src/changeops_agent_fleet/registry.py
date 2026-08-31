@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TypedDict
 
@@ -126,6 +127,7 @@ def build_registry(
     runtime_base_url: str,
     *,
     now: datetime | None = None,
+    identity_reference: Callable[[str, str], str] | None = None,
 ) -> tuple[AgentRegistration, ...]:
     """Build immutable tenant-scoped registrations from fixed templates."""
 
@@ -149,7 +151,11 @@ def build_registry(
                 ),
                 risk_ceiling=definition["risk"],
                 runtime_endpoint=AnyUrl(f"{base}/v1/agents/{agent_id}"),
-                identity_reference=f"identity://local/{tenant_id}/{agent_id}-v1",
+                identity_reference=(
+                    identity_reference(tenant_id, agent_id)
+                    if identity_reference is not None
+                    else f"identity://local/{tenant_id}/{agent_id}-v1"
+                ),
                 status=AgentStatus.ACTIVE,
                 budget=AgentInvocationBudget(
                     max_model_calls=1,

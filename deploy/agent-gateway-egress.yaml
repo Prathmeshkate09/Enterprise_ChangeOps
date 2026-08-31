@@ -1,0 +1,7 @@
+name: changeops-egress
+protocols:
+  - MCP
+googleManaged:
+  governedAccessPath: AGENT_TO_ANYWHERE
+registries:
+  - //agentregistry.googleapis.com/projects/enterprise-changeops/locations/us-central1

@@ -12,6 +12,7 @@ dependencies = [
     "changeops-core",
     "fastapi>=0.141.1,<0.142",
     "google-adk==2.8.0",
+    "google-crc32c>=1.7.1,<2",
     "httpx>=0.28.1,<0.29",
     "uvicorn>=0.35.0,<0.36",
 ]

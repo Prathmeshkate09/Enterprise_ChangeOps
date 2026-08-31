@@ -21,6 +21,10 @@ coverage/
 .cache/
 .npm-cache/
 .uv-cache/
+.uv-python/
+.phase8-test-*/
+.test-tmp/
+.temp/
 artifacts/
 data/
 output/

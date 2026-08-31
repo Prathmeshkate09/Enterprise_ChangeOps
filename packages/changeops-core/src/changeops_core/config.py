@@ -29,6 +29,21 @@ class AgentModelMode(StrEnum):
     LIVE = "live"
 
 
+class GovernanceBackend(StrEnum):
+    """Prompt, registry, memory, identity, and secret governance adapters."""
+
+    LOCAL = "local"
+    GOOGLE_CLOUD = "google_cloud"
+
+
+class AgentIdentityMode(StrEnum):
+    """Identity representation used in agent registrations."""
+
+    LOCAL = "local"
+    AGENT_IDENTITY = "agent_identity"
+    SERVICE_ACCOUNT = "service_account"
+
+
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables.
 
@@ -232,6 +247,22 @@ class Settings(BaseSettings):
         validation_alias="AGENT_GATEWAY_ENDPOINT",
     )
     memory_bank_id: str | None = Field(default=None, validation_alias="MEMORY_BANK_ID")
+    governance_backend: GovernanceBackend = Field(
+        default=GovernanceBackend.LOCAL,
+        validation_alias="GOVERNANCE_BACKEND",
+    )
+    agent_identity_mode: AgentIdentityMode = Field(
+        default=AgentIdentityMode.LOCAL,
+        validation_alias="AGENT_IDENTITY_MODE",
+    )
+    agent_identity_prefix: str | None = Field(
+        default=None,
+        validation_alias="AGENT_IDENTITY_PREFIX",
+    )
+    agent_service_account_domain: str | None = Field(
+        default=None,
+        validation_alias="AGENT_SERVICE_ACCOUNT_DOMAIN",
+    )
     otel_exporter_otlp_endpoint: str | None = Field(
         default=None,
         validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -259,6 +290,29 @@ class Settings(BaseSettings):
                 "Live Gemini mode requires GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, "
                 "and GOOGLE_GENAI_USE_VERTEXAI=true."
             )
+        if self.governance_backend is GovernanceBackend.GOOGLE_CLOUD:
+            required = {
+                "GOOGLE_CLOUD_PROJECT": self.google_cloud_project,
+                "GOOGLE_CLOUD_LOCATION": self.google_cloud_location,
+                "MODEL_ARMOR_TEMPLATE": self.model_armor_template,
+                "AGENT_REGISTRY_LOCATION": self.agent_registry_location,
+                "MEMORY_BANK_ID": self.memory_bank_id,
+            }
+            missing = tuple(name for name, value in required.items() if not value)
+            if missing:
+                raise ValueError(
+                    "Managed governance requires explicit configuration: " + ", ".join(missing)
+                )
+            if self.agent_identity_mode is AgentIdentityMode.LOCAL:
+                raise ValueError("Managed governance cannot use local agent identities.")
+        if self.agent_identity_mode is AgentIdentityMode.AGENT_IDENTITY:
+            if not self.agent_identity_prefix:
+                raise ValueError("AGENT_IDENTITY_PREFIX is required for Agent Identity mode.")
+        if self.agent_identity_mode is AgentIdentityMode.SERVICE_ACCOUNT:
+            if not self.agent_service_account_domain:
+                raise ValueError(
+                    "AGENT_SERVICE_ACCOUNT_DOMAIN is required for service-account identity mode."
+                )
         return self
 
 

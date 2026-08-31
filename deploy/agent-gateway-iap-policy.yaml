@@ -1,0 +1,10 @@
+name: changeops-gateway-iap
+target:
+  resources:
+    - projects/enterprise-changeops/locations/us-central1/agentGateways/changeops-egress
+policyProfile: REQUEST_AUTHZ
+action: CUSTOM
+customProvider:
+  authzExtension:
+    resources:
+      - projects/enterprise-changeops/locations/us-central1/authzExtensions/changeops-iap-dry-run

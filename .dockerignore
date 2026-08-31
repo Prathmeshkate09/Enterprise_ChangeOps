@@ -1,7 +1,15 @@
 .git
 .github
 .cache
+.context
+.mypy_cache
+.phase8-test-*
+.ruff_cache
+.temp
+.uv-cache
+.uv-python
 .venv
+pytest-cache-files-*
 **/.next
 **/dist
 **/node_modules
@@ -12,6 +20,7 @@
 coverage
 artifacts
 data
+output
 .env
 .env.*
 *.pem

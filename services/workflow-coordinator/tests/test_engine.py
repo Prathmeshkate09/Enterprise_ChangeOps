@@ -107,12 +107,15 @@ def build_plan(event: ChangeEvent) -> RemediationPlan:
 
 
 class FakeFleet:
-    def __init__(self, plan: RemediationPlan) -> None:
+    def __init__(self, plan: RemediationPlan, *, error_code: str | None = None) -> None:
         self.plan = plan
         self.calls = 0
+        self.error_code = error_code
 
     async def analyze(self, **_: object) -> SimpleNamespace:
         self.calls += 1
+        if self.error_code is not None:
+            raise DependencyCallError(self.error_code, transient=False)
         return SimpleNamespace(
             draft_plan=self.plan,
             draft_plan_hash=calculate_plan_hash(self.plan),
@@ -190,6 +193,7 @@ def build_engine(
     *,
     transient_analytics: bool = False,
     fail_support_verification: bool = False,
+    fleet_error_code: str | None = None,
 ) -> tuple[
     WorkflowEngine,
     InMemoryWorkflowRepository,
@@ -202,7 +206,7 @@ def build_engine(
     workflows = InMemoryWorkflowRepository()
     changes = InMemoryChangeStateRepository()
     sandboxes = FakeSandboxes(fail_support_verification=fail_support_verification)
-    fleet = FakeFleet(plan)
+    fleet = FakeFleet(plan, error_code=fleet_error_code)
     gateway = FakeGateway(sandboxes, transient_analytics=transient_analytics)
     engine = WorkflowEngine(
         workflows=workflows,
@@ -298,3 +302,25 @@ async def test_permanent_event_is_dead_lettered_once_without_retry_loop() -> Non
     assert first.last_error_code == "UNSUPPORTED_EVENT_TYPE"
     assert len(dead_letters) == 1
     assert fleet.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_prompt_injection_is_blocked_and_audited_before_any_tool_call() -> None:
+    event = build_event(event_id="evt_phase8_injection")
+    engine, workflows, changes, fleet, gateway, _ = build_engine(
+        event,
+        fleet_error_code="PROMPT_INJECTION_BLOCKED",
+    )
+
+    blocked = await engine.process_event(event)
+
+    assert blocked.status is WorkflowRuntimeStatus.FAILED
+    assert blocked.last_error_code == "PROMPT_INJECTION_BLOCKED"
+    assert fleet.calls == 1
+    assert gateway.approval_calls == 0
+    assert gateway.attempts == {}
+    change = changes.get(event.tenant_id, derive_change_id(event))
+    assert change.status is WorkflowState.BLOCKED
+    audit = changes.list_audit(event.tenant_id, change.change_id)
+    assert any(item.event_type == "SECURITY_PROMPT_INJECTION_BLOCKED" for item in audit)
+    assert workflows.list_dead_letters(event.tenant_id, limit=10) == ()

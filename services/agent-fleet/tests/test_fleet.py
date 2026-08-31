@@ -33,6 +33,9 @@ async def test_golden_event_produces_evidence_backed_parallel_proposals(
     assert all(invocation.tool_calls == 0 for invocation in result.invocations)
     assert result.max_parallel_agents >= 3
     assert result.draft_plan_hash == calculate_plan_hash(result.draft_plan)
+    memory = next(item for item in result.evidence if item.evidence_id.startswith("memory-"))
+    assert memory.evidence_id in result.impact.evidence_refs
+    assert memory.evidence_id in result.orchestration.evidence_refs
 
 
 @pytest.mark.asyncio

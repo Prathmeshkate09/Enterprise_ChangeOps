@@ -6,7 +6,8 @@ enterprise changes. The implementation follows the checked-in
 phase-gated architecture and keeps deterministic application code in control
 of workflow state, authorization, approvals, retries, and tool execution.
 
-**Phases 0 through 7 are complete locally.** The repository includes a runnable control
+**Phases 0 through 8 are complete locally; Phase 8 also has a reproducible managed-cloud gate.**
+The repository includes runnable control
 shells, versioned Python/TypeScript contracts, cross-runtime canonical plan
 hashing, audited deterministic transitions, tenant boundaries, and four
 independently deployable enterprise sandbox services. Firestore now holds
@@ -25,7 +26,11 @@ tenant state, durable workflows, the seven-agent fleet, exact-plan approvals,
 closed tool registry, dead letters, and merged audit evidence. Its sandbox-only
 server actions start the golden change and record approval decisions while live
 SSE refreshes follow the execution to completion. Production writes remain
-disabled. The repository tests and acceptance commands below reproduce the
+disabled. Phase 8 now screens untrusted change content before agent work, records
+visible security blocks, adds tenant-scoped prior-incident memory as cited
+untrusted evidence, exposes distinct identities and bounded registries, and
+provides fail-closed Model Armor, Memory Bank, Agent Registry, and Secret Manager
+adapters. The repository tests and acceptance commands below reproduce the
 implemented behavior locally.
 
 ## Prerequisites
@@ -64,6 +69,10 @@ python scripts/tasks.py tool-gateway-check
 python scripts/tasks.py workflow-check
 # Builds the full UI stack and proves the Phase 7 operational view and workflow:
 python scripts/tasks.py control-tower-check
+# Proves the Phase 8 security block, registry visibility, and cited memory gate:
+python scripts/tasks.py managed-governance-check
+# Calls the real configured Google Cloud governance resources using ADC:
+python scripts/tasks.py managed-cloud-check
 ```
 
 Start both development services until interrupted:
@@ -126,6 +135,8 @@ python scripts/tasks.py agent-fleet-check
 python scripts/tasks.py tool-gateway-check
 python scripts/tasks.py workflow-check
 python scripts/tasks.py control-tower-check
+python scripts/tasks.py managed-governance-check
+python scripts/tasks.py managed-cloud-check
 ```
 
 The scenario resets its tenant, snapshots every service, migrates and verifies
@@ -140,6 +151,18 @@ The Control Tower scenario creates a fresh tenant and durable workflow, checks
 the server-rendered approval and security evidence, approves the exact plan,
 waits for completion, and confirms the completed tasks and audit evidence are
 rendered without relying on backend logs.
+
+The managed-governance scenario submits the required prompt-injection attack,
+confirms a visible block before any tool task, verifies all seven scoped agents
+and bounded tools are registered, and proves prior incident memory influences
+analysis through an evidence reference. This is the local adapter gate; it does
+not claim that Google Cloud managed resources were called. The separate
+`managed-cloud-check` requires `GOVERNANCE_BACKEND=google_cloud`, the documented
+Google Cloud resource settings, a non-local identity mode, `DEMO_TENANT_ID`
+scoped to a synthetic Memory Bank record, and Application Default Credentials.
+It calls Model Armor, Agent Registry, and Memory Bank and fails if the attack is
+not blocked, tenant isolation fails, or the seven identity references are not
+distinct.
 
 ## Repository layout
 
@@ -170,7 +193,10 @@ docs/                           Plan, architecture decisions and operating docum
 - Logs recursively redact credentials, authorization values, tokens, secrets,
   email addresses, and common API-key fields.
 - Cloud configuration is optional locally and must arrive through environment
-  variables or Secret Manager later.
+  variables or Secret Manager in managed mode.
+- Managed governance rejects missing Model Armor, Agent Registry, Memory Bank,
+  location, project, or scoped identity configuration at startup.
+- Historical memory is untrusted input and must remain tenant scoped and cited.
 - The Control Tower always labels the environment as `SANDBOX`.
 
 See [ADR 0002](docs/architecture/adr/0002-deterministic-control-plane.md)

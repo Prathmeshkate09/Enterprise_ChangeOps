@@ -302,6 +302,37 @@ def control_tower_check() -> None:
     )
 
 
+def managed_governance_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    docker = executable("docker")
+    scenario_environment = {
+        "AUTH_AUDIENCE": "enterprise-changeops-tool-gateway",
+        "CONTROL_TOWER_ENVIRONMENT": "sandbox",
+        "CONTROL_TOWER_SANDBOX_ACTIONS_ENABLED": "true",
+        "EVENT_GATEWAY_WEBHOOK_SECRET": secrets.token_urlsafe(48),
+        "GOVERNANCE_BACKEND": "local",
+        "PHASE8_RUN_ID": uuid4().hex[:12],
+        "PRODUCTION_WRITES_ENABLED": "false",
+        "TOOL_GATEWAY_AUTH_SECRET": secrets.token_urlsafe(48),
+        "WORKFLOW_CALLBACK_SECRET": secrets.token_urlsafe(48),
+    }
+    run(
+        [docker, "compose", "up", "-d", "--build", "--wait", "control-tower"],
+        environment=scenario_environment,
+    )
+    run(
+        [str(VENV_PYTHON), "scripts/phase8_scenario.py"],
+        environment=scenario_environment,
+    )
+
+
+def managed_cloud_check() -> None:
+    if not VENV_PYTHON.exists():
+        raise RuntimeError("The Python environment is missing. Run the setup task first.")
+    run([str(VENV_PYTHON), "scripts/phase8_managed_cloud_check.py"])
+
+
 def wait_for_health(
     url: str,
     *,
@@ -431,6 +462,8 @@ def main() -> None:
             "tool-gateway-check",
             "workflow-check",
             "control-tower-check",
+            "managed-governance-check",
+            "managed-cloud-check",
             "clean",
         ),
     )
@@ -448,6 +481,8 @@ def main() -> None:
         "tool-gateway-check": tool_gateway_check,
         "workflow-check": workflow_check,
         "control-tower-check": control_tower_check,
+        "managed-governance-check": managed_governance_check,
+        "managed-cloud-check": managed_cloud_check,
         "dev": lambda: serve(smoke_only=False),
         "smoke": lambda: serve(smoke_only=True),
         "clean": clean,

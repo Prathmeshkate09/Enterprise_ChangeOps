@@ -1,0 +1,16 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - build
+      - --file
+      - services/agent-fleet/Dockerfile
+      - --tag
+      - ${_IMAGE_URI}
+      - .
+images:
+  - ${_IMAGE_URI}
+logsBucket: ${_LOGS_BUCKET}
+options:
+  logging: GCS_ONLY

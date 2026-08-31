@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: setup lint test audit build dev smoke sandbox-check persistence-check agent-fleet-check tool-gateway-check workflow-check control-tower-check clean
+.PHONY: setup lint test audit build dev smoke sandbox-check persistence-check agent-fleet-check tool-gateway-check workflow-check control-tower-check managed-governance-check clean
 
 setup:
 	$(PYTHON) scripts/tasks.py setup
@@ -40,6 +40,9 @@ workflow-check:
 
 control-tower-check:
 	$(PYTHON) scripts/tasks.py control-tower-check
+
+managed-governance-check:
+	$(PYTHON) scripts/tasks.py managed-governance-check
 
 clean:
 	$(PYTHON) scripts/tasks.py clean

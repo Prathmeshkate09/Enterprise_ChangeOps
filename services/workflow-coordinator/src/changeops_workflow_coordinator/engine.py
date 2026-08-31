@@ -139,9 +139,6 @@ class WorkflowEngine:
                 WorkflowState.SCREENING,
                 record_updates={"workflow_execution_id": record.workflow_execution_id},
             )
-        if change.status is WorkflowState.SCREENING:
-            change = await self._transition(record, WorkflowState.ANALYZING)
-
         if record.plan is None:
             try:
                 analysis = await self._fleet.analyze(
@@ -150,9 +147,31 @@ class WorkflowEngine:
                     request_id=f"req_{uuid4().hex}",
                 )
             except DependencyCallError as error:
+                if error.code == "PROMPT_INJECTION_BLOCKED":
+                    await self._record_audit(
+                        record,
+                        event_type="SECURITY_PROMPT_INJECTION_BLOCKED",
+                        action="screen_change_content",
+                        input_document={"event_hash": sha256_digest(event)},
+                        output_document={"decision": "blocked", "code": error.code},
+                        status=AuditStatus.REJECTED,
+                        summary=(
+                            "Security screening blocked untrusted change content before "
+                            "agent or tool execution."
+                        ),
+                    )
+                    await self._transition(record, WorkflowState.BLOCKED)
+                    return await self._terminal(
+                        record,
+                        WorkflowRuntimeStatus.FAILED,
+                        error.code,
+                    )
                 if error.transient:
                     raise WorkflowTransientError(error.code) from error
                 return await self._dead_letter(record, error.code)
+            change = await _run_sync(self._changes.get, record.tenant_id, record.change_id)
+            if change.status is WorkflowState.SCREENING:
+                change = await self._transition(record, WorkflowState.ANALYZING)
             plan = analysis.draft_plan
             if (
                 plan.tenant_id != record.tenant_id
@@ -183,6 +202,8 @@ class WorkflowEngine:
 
         plan = self._require_plan(record)
         change = await _run_sync(self._changes.get, record.tenant_id, record.change_id)
+        if change.status is WorkflowState.SCREENING:
+            change = await self._transition(record, WorkflowState.ANALYZING)
         if change.status is WorkflowState.ANALYZING:
             change = await self._transition(
                 record,

@@ -36,6 +36,7 @@ from google.genai import types
 from pydantic import BaseModel, JsonValue
 
 from changeops_agent_fleet.evidence import EvidenceProvider, field_transition
+from changeops_agent_fleet.governance import GovernanceService, build_governance
 from changeops_agent_fleet.models import (
     DeterministicModel,
     InvocationTracker,
@@ -63,20 +64,27 @@ class AgentFleet:
         *,
         settings: Settings,
         evidence_provider: EvidenceProvider,
+        governance: GovernanceService | None = None,
         runtime_base_url: str = "http://127.0.0.1:8200",
     ) -> None:
         self._settings = settings
         self._evidence_provider = evidence_provider
+        self._governance = governance or build_governance(settings)
         self._runtime_base_url = runtime_base_url
 
     def registrations(self, tenant_id: str) -> tuple[AgentRegistration, ...]:
-        registry = build_registry(tenant_id, self._runtime_base_url)
+        registry = build_registry(
+            tenant_id,
+            self._runtime_base_url,
+            identity_reference=self._governance.identity_reference,
+        )
         assert_registry_is_bounded(registry)
         return registry
 
     async def analyze(self, request: FleetAnalysisRequest) -> FleetAnalysisResult:
         started_at = datetime.now(UTC)
-        evidence = await self._evidence_provider.collect(request.event)
+        memory_evidence = await self._governance.prepare(request.event)
+        evidence = (*await self._evidence_provider.collect(request.event), *memory_evidence)
         registry = self.registrations(request.event.tenant_id)
         tracker = InvocationTracker()
         expected = _derive_outputs(request, evidence)
@@ -274,6 +282,10 @@ def _derive_outputs(
         event.subject.system_id,
     )
     evidence_refs = tuple(item.evidence_id for item in evidence)
+    memory_refs = tuple(
+        item.evidence_id for item in evidence if item.evidence_id.startswith("memory-")
+    )
+    impact_refs = ("catalog-contract", "catalog-dependencies", *memory_refs)
     specialists = tuple(agent_id for agent_id in AGENT_IDS if agent_id != "orchestrator")
     outputs: dict[str, BaseModel] = {
         "orchestrator": OrchestrationDirective(
@@ -284,7 +296,7 @@ def _derive_outputs(
                 "across managed dependencies."
             ),
             selected_agent_ids=specialists,
-            evidence_refs=("catalog-contract", "catalog-dependencies"),
+            evidence_refs=impact_refs,
             confidence=0.96,
             unknowns=tuple(
                 f"Unmanaged dependency {target} requires owner-led follow-up."
@@ -301,11 +313,18 @@ def _derive_outputs(
             ),
             severity=RiskLevel.HIGH,
             confidence=0.95,
-            evidence_refs=("catalog-contract", "catalog-dependencies"),
+            evidence_refs=impact_refs,
             owner_refs=(str(by_id["catalog-contract"].attributes.get("owner", "owner://unknown")),),
-            unknowns=tuple(
-                f"The unmanaged {target} impact is not automatically remediable."
-                for target in unmanaged
+            unknowns=(
+                *tuple(
+                    f"The unmanaged {target} impact is not automatically remediable."
+                    for target in unmanaged
+                ),
+                *tuple(
+                    "Historical incident memory must be corroborated against current "
+                    "platform evidence."
+                    for _ in memory_refs[:1]
+                ),
             ),
         ),
         "compliance": _compliance_output(request, by_id["policy-sandbox-change"]),

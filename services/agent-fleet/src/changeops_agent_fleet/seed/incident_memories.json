@@ -1,0 +1,16 @@
+{
+  "incidents": [
+    {
+      "incident_id": "inc_customer_identifier_2025_11",
+      "systems": ["customer-api", "crm-sync", "customer-daily-etl", "support-portal"],
+      "change": "Rename customer_id to customer_uuid",
+      "outcome": "Recovered after analytics mapping lag caused inconsistent customer joins.",
+      "lessons": [
+        "Capture configuration snapshots before every mapping change.",
+        "Update CRM, analytics, and support mappings under one plan hash.",
+        "Verify cross-system customer counts before completion."
+      ],
+      "source_reference": "incident://synthetic/INC-2025-11-CUSTOMER-ID"
+    }
+  ]
+}
