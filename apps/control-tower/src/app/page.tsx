@@ -1,5 +1,7 @@
 import { createDemoChangeAction, decideApprovalAction } from "./actions";
 import { ControlTower } from "./ui/control-tower";
+import { redirect } from "next/navigation";
+import { enterpriseEnabled } from "@/lib/enterprise-access";
 
 import {
   defaultTenantId,
@@ -14,6 +16,7 @@ type HomePageProps = Readonly<{
 }>;
 
 export default async function HomePage({ searchParams }: HomePageProps) {
+  if (enterpriseEnabled()) redirect("/access-status");
   const query = await searchParams;
   const requestedTenant = query.tenant_id?.trim();
   const tenantId =

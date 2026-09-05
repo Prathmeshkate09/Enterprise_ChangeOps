@@ -1,10 +1,12 @@
 import { controlApiBaseUrl, isValidIdentifier } from "@/lib/changeops-data";
 import { serviceAuthHeaders } from "@/lib/service-auth";
+import { enterpriseEnabled } from "@/lib/enterprise-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
+  if (enterpriseEnabled()) return new Response(null, { status: 403 });
   const requestUrl = new URL(request.url);
   const tenantId = requestUrl.searchParams.get("tenant_id") ?? "";
   const changeId = requestUrl.searchParams.get("change_id") ?? "";

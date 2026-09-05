@@ -284,6 +284,12 @@ class Settings(BaseSettings):
     )
     auth_audience: str | None = Field(default=None, validation_alias="AUTH_AUDIENCE")
     demo_tenant_id: str | None = Field(default=None, validation_alias="DEMO_TENANT_ID")
+    enterprise_access_enabled: bool = Field(
+        default=False, validation_alias="ENTERPRISE_ACCESS_ENABLED"
+    )
+    identity_platform_project: str | None = Field(
+        default=None, validation_alias="IDENTITY_PLATFORM_PROJECT"
+    )
 
     @model_validator(mode="after")
     def reject_production_writes(self) -> "Settings":
@@ -291,6 +297,13 @@ class Settings(BaseSettings):
 
         if self.production_writes_enabled:
             raise ValueError("Production writes are disabled in Enterprise ChangeOps.")
+        if self.enterprise_access_enabled and (
+            not self.identity_platform_project
+            or self.persistence_backend is not PersistenceBackend.FIRESTORE
+        ):
+            raise ValueError(
+                "Enterprise access requires IDENTITY_PLATFORM_PROJECT and Firestore persistence."
+            )
         if (
             self.persistence_backend is PersistenceBackend.FIRESTORE
             and not self.google_cloud_project

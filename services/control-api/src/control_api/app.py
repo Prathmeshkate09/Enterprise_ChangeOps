@@ -28,10 +28,16 @@ from changeops_persistence import (
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from google.api_core.exceptions import GoogleAPIError
+from google.cloud import firestore
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse
 
+from control_api.admission.identity import GoogleIdentityProvider, IdentityProvider
+from control_api.admission.routes import build_admission_router
+from control_api.admission.service import AdmissionService
+from control_api.admission.store import FirestoreStore
 from control_api.errors import ControlApiError
 from control_api.models import HealthResponse, ServiceResponse
 from control_api.repository import build_repository
@@ -58,6 +64,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request.state.request_id = _request_id(request)
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
+        if request.url.path.startswith("/v1/access"):
+            response.headers["Cache-Control"] = "no-store"
         return response
 
 
@@ -83,6 +91,8 @@ def create_app(
     *,
     repository: ChangeStateRepository | None = None,
     settings: Settings | None = None,
+    admission_service: AdmissionService | None = None,
+    identity_provider: IdentityProvider | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_repository = repository or build_repository(resolved_settings)
@@ -110,6 +120,13 @@ def create_app(
 
     @app.exception_handler(ControlApiError)
     async def control_error_handler(request: Request, error: ControlApiError) -> JSONResponse:
+        if admission_service is not None and request.url.path.startswith("/v1/access"):
+            if error.status_code in {401, 403, 409}:
+                await run_in_threadpool(
+                    admission_service.record_rejection,
+                    getattr(request.state, "admission_actor", "unauthenticated"),
+                    error.code,
+                )
         return _error_response(
             request,
             status_code=error.status_code,
@@ -221,7 +238,33 @@ def create_app(
             message="Operational persistence is unavailable.",
         )
 
-    app.include_router(build_router(resolved_repository))
+    if resolved_settings.enterprise_access_enabled:
+        admission_service = admission_service or AdmissionService(
+            FirestoreStore(
+                firestore.Client(
+                    project=resolved_settings.google_cloud_project,
+                    database=resolved_settings.firestore_database,
+                )
+            )
+        )
+        identity_provider = identity_provider or GoogleIdentityProvider(
+            resolved_settings.identity_platform_project or ""
+        )
+        app.include_router(build_admission_router(admission_service, identity_provider))
+    else:
+        # Legacy header-based sandbox routes are never mounted in enterprise mode.
+        # Workflow capabilities will be exposed through membership-authorized routes in E2-E4.
+        app.include_router(build_router(resolved_repository))
+
+    @app.exception_handler(GoogleAPIError)
+    async def admission_storage_failure(request: Request, _: GoogleAPIError) -> JSONResponse:
+        logger.error("admission_storage_unavailable")
+        return _error_response(
+            request,
+            status_code=503,
+            code="persistence_unavailable",
+            message="Access persistence is unavailable.",
+        )
 
     @app.get("/", response_model=ServiceResponse)
     async def service_metadata() -> ServiceResponse:
@@ -247,6 +290,8 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         try:
             await run_in_threadpool(partial(resolved_repository.check_ready))
+            if admission_service is not None:
+                await run_in_threadpool(admission_service.store.check_ready)
         except Exception as error:
             logger.exception("persistence_readiness_failed", error_type=type(error).__name__)
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

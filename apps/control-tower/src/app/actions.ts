@@ -11,6 +11,7 @@ import {
   submitApprovalDecision,
 } from "@/lib/changeops-data";
 import type { ActionState } from "@/lib/changeops-types";
+import { enterpriseEnabled } from "@/lib/enterprise-access";
 
 function formString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -21,6 +22,7 @@ export async function createDemoChangeAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (enterpriseEnabled()) return { status: "error", message: "Sandbox actions are unavailable in enterprise mode." };
   const tenantId = formString(formData, "tenantId");
   if (!isValidIdentifier(tenantId)) {
     return { status: "error", message: "Enter a valid tenant identifier." };
@@ -47,6 +49,7 @@ export async function decideApprovalAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (enterpriseEnabled()) return { status: "error", message: "Sandbox actions are unavailable in enterprise mode." };
   const tenantId = formString(formData, "tenantId");
   const approvalId = formString(formData, "approvalId");
   const comment = formString(formData, "comment");
