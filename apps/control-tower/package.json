@@ -13,23 +13,23 @@
   },
   "dependencies": {
     "firebase": "12.18.0",
-    "google-auth-library": "^10.9.1",
-    "next": "16.3.3",
+    "google-auth-library": "^11.0.2",
+    "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "7.0.1",
-    "@testing-library/react": "16.3.2",
-    "@types/node": "26.3.0",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.4.1",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
-    "@vitest/coverage-v8": "4.1.11",
-    "eslint": "9.39.5",
-    "eslint-config-next": "16.3.3",
-    "jsdom": "29.1.1",
+    "@types/react-dom": "19.2.7",
+    "@vitest/coverage-v8": "5.0.0",
+    "eslint": "10.10.0",
+    "eslint-config-next": "16.3.4",
+    "jsdom": "30.0.1",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   },
   "engines": {
     "node": ">=22.0.0"
