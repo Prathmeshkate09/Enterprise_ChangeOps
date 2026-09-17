@@ -66,6 +66,7 @@ export async function createInvitation(
         },
       },
     );
+    revalidatePath("/admin/invitations");
     return {
       message:
         "Invitation created. Share this single-use code securely with the intended recipient. It expires in 24 hours.",
@@ -153,6 +154,56 @@ export async function setAdministrator(
         "Administrator access updated. MFA is required for privileged access.",
       ok: true,
     };
+  } catch (error) {
+    return { message: accessErrorMessage(error) };
+  }
+}
+
+export async function revokeInvitation(
+  _state: FormResult,
+  form: FormData,
+): Promise<FormResult> {
+  await checkOrigin();
+  await requireAdmin();
+  try {
+    await accessRequest(
+      `/admin/invitations/${encodeURIComponent(field(form, "recordId"))}/revoke`,
+      {
+        method: "POST",
+        body: { expected_version: Number(field(form, "version")) },
+      },
+    );
+    revalidatePath("/admin/invitations");
+    return { message: "Invitation revoked. Its code can no longer grant access.", ok: true };
+  } catch (error) {
+    return { message: accessErrorMessage(error) };
+  }
+}
+
+export async function updateMembership(
+  _state: FormResult,
+  form: FormData,
+): Promise<FormResult> {
+  await checkOrigin();
+  await requireAdmin();
+  const organizationId = encodeURIComponent(field(form, "organizationId"));
+  const active = field(form, "active");
+  if (active !== "true" && active !== "false")
+    return { message: "Select a membership status." };
+  try {
+    await accessRequest(
+      `/admin/organizations/${organizationId}/members/${encodeURIComponent(field(form, "recordId"))}`,
+      {
+        method: "PATCH",
+        body: {
+          role: field(form, "role"),
+          active: active === "true",
+          expected_version: Number(field(form, "version")),
+        },
+      },
+    );
+    revalidatePath(`/admin/organizations/${organizationId}/members`);
+    return { message: "Membership updated. New requests use the updated access.", ok: true };
   } catch (error) {
     return { message: accessErrorMessage(error) };
   }

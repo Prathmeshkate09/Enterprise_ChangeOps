@@ -33,19 +33,32 @@ export default async function UsersPage({
       <div className="access-split">
         <section className="access-card">
           <h2>Admitted accounts</h2>
-          <div className="access-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Account ID</th>
-                  <th>Status</th>
-                  <th>Access</th>
+          <div className="access-table-wrap access-accounts-wrap">
+            <table
+              className="access-accounts-table"
+              role="table"
+              aria-label="Admitted accounts"
+            >
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th scope="col" role="columnheader">
+                    Account ID
+                  </th>
+                  <th scope="col" role="columnheader">
+                    Status
+                  </th>
+                  <th scope="col" role="columnheader">
+                    Access
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup">
                 {users.items.map((user) => (
-                  <tr key={user.record_id}>
-                    <td>
+                  <tr key={user.record_id} role="row">
+                    <td role="cell">
+                      <span className="access-mobile-label" aria-hidden="true">
+                        Account ID
+                      </span>
                       <strong>{user.subject}</strong>
                       {current.owner && (
                         <small>
@@ -60,8 +73,16 @@ export default async function UsersPage({
                             : "Organization member"}
                       </small>
                     </td>
-                    <td>{user.active ? "Active" : "Suspended"}</td>
-                    <td>
+                    <td role="cell" className="access-account-status">
+                      <span className="access-mobile-label" aria-hidden="true">
+                        Status
+                      </span>
+                      {user.active ? "Active" : "Suspended"}
+                    </td>
+                    <td role="cell">
+                      <span className="access-mobile-label" aria-hidden="true">
+                        Access
+                      </span>
                       {user.owner || user.subject === current.subject ? (
                         <span className="access-muted">Protected account</span>
                       ) : (
@@ -115,11 +136,17 @@ export default async function UsersPage({
               <input
                 name="organizationId"
                 required
-                pattern="[A-Za-z0-9_-]+"
+                // HTML patterns use Unicode Sets; escape the literal hyphen.
+                pattern={"[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}"}
                 maxLength={128}
+                aria-describedby="organization-id-help"
                 placeholder="Copy from Organizations"
               />
             </label>
+            <p id="organization-id-help">
+              Use 1–128 letters, numbers, underscores or hyphens. Start with a
+              letter or number.
+            </p>
             <label>
               Role
               <select name="role" defaultValue="auditor">

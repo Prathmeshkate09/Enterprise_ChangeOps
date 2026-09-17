@@ -60,6 +60,8 @@ class Invitation(Model):
     invited_by: str
     expires_at: AwareDatetime
     redeemed_by: str | None = None
+    revoked: bool = False
+    version: int = Field(default=1, ge=1)
 
 
 class OrganizationCreate(Model):
@@ -79,6 +81,14 @@ class InvitationRedeem(Model):
 class StatusUpdate(Model):
     active: bool
     expected_version: int = Field(ge=1)
+
+
+class InvitationRevoke(Model):
+    expected_version: int = Field(ge=1)
+
+
+class MembershipUpdate(StatusUpdate):
+    role: Role
 
 
 class SessionCreate(Model):

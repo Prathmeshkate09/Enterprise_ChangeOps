@@ -47,6 +47,9 @@ export default async function OrganizationsPage({
                       <td>
                         <strong>{org.name}</strong>
                         <small>{org.organization_id}</small>
+                        <Link href={`/admin/organizations/${org.organization_id}/members`}>
+                          Manage members
+                        </Link>
                       </td>
                       <td>
                         <span className="access-pill">

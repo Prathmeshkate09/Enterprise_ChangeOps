@@ -6,8 +6,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from changeops_core import Settings
 from changeops_persistence import InMemoryChangeStateRepository
-from control_api.admission.models import Identity, InvitationCreate, Role, StatusUpdate
-from control_api.admission.service import AdmissionService, user_key
+from control_api.admission.models import (
+    Identity,
+    InvitationCreate,
+    InvitationRevoke,
+    MembershipUpdate,
+    Role,
+    StatusUpdate,
+)
+from control_api.admission.service import AdmissionService, member_path, user_key
 from control_api.admission.store import MemoryStore, MemoryTransaction
 from control_api.app import create_app
 from control_api.errors import ControlApiError
@@ -305,3 +312,269 @@ def test_admission_pagination_is_bounded_and_does_not_repeat(service: AdmissionS
     assert len(first) == 50
     assert len(second) == 2
     assert {row["record_id"] for row in first}.isdisjoint(row["record_id"] for row in second)
+
+
+def pending_invitation(service: AdmissionService) -> tuple[str, str]:
+    org = service.create_organization(OWNER, "Invitation lifecycle")
+    invitation, token = service.invite(
+        OWNER,
+        InvitationCreate(email=ALICE.email, organization_id=org.organization_id, role=Role.AUDITOR),
+    )
+    record = next(
+        item
+        for item in service.list_records(OWNER, "invitations")
+        if item["invitation_id"] == invitation.invitation_id
+    )
+    return str(record["record_id"]), token
+
+
+def test_revocation_blocks_redemption_and_normalizes_legacy_records(
+    service: AdmissionService,
+) -> None:
+    record_id, token = pending_invitation(service)
+
+    def legacy(tx: MemoryTransaction) -> None:
+        path = f"admission_invitations/{record_id}"
+        record = tx.get(path)
+        assert record is not None
+        record.pop("version")
+        record.pop("revoked")
+        tx.put(path, record)
+
+    service.store.transact(legacy)
+    assert service.list_records(OWNER, "invitations")[0]["version"] == 1
+    service.revoke_invitation(OWNER, record_id, InvitationRevoke(expected_version=1))
+    with pytest.raises(ControlApiError):
+        service.redeem(ALICE, token)
+    assert service.access(ALICE).workspaces == ()
+    record = service.list_records(OWNER, "invitations")[0]
+    assert record["revoked"] is True and record["version"] == 2
+    assert token not in str(record)
+    assert any(
+        row["action"] == "invitation_revoked" for row in service.list_records(OWNER, "audit")
+    )
+
+
+@pytest.mark.parametrize("state", ["stale", "redeemed", "revoked", "expired"])
+def test_invitation_terminal_and_stale_changes_conflict(
+    service: AdmissionService,
+    state: str,
+) -> None:
+    record_id, token = pending_invitation(service)
+    version = 1
+    if state == "redeemed":
+        service.redeem(ALICE, token)
+        version = 2
+    elif state == "revoked":
+        service.revoke_invitation(OWNER, record_id, InvitationRevoke(expected_version=1))
+        version = 2
+    elif state == "expired":
+        now = datetime.now(UTC)
+        service.clock = lambda: now + timedelta(days=2)
+    else:
+        version = 99
+    assert service.list_records(OWNER, "invitations")[0]["status"] == (
+        "pending" if state == "stale" else state
+    )
+    with pytest.raises(ControlApiError) as error:
+        service.revoke_invitation(OWNER, record_id, InvitationRevoke(expected_version=version))
+    assert error.value.status_code == 409
+
+
+def test_revoke_and_redeem_race_has_one_winner(service: AdmissionService) -> None:
+    record_id, token = pending_invitation(service)
+
+    def operation(revoke: bool) -> bool:
+        try:
+            if revoke:
+                service.revoke_invitation(OWNER, record_id, InvitationRevoke(expected_version=1))
+            else:
+                service.redeem(ALICE, token)
+            return True
+        except ControlApiError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert list(pool.map(operation, [False, True])).count(True) == 1
+    record = service.list_records(OWNER, "invitations")[0]
+    assert record["revoked"] != bool(service.access(ALICE).workspaces)
+
+
+def test_membership_updates_are_scoped_immediate_and_versioned(service: AdmissionService) -> None:
+    first = admit(service, ALICE)
+    second = admit(service, ALICE)
+    identifier = user_key(ALICE.subject)
+    service.update_membership(
+        OWNER,
+        first,
+        identifier,
+        MembershipUpdate(role=Role.APPROVER, active=False, expected_version=1),
+    )
+    with pytest.raises(ControlApiError):
+        service.workspace(ALICE, first)
+    assert service.workspace(ALICE, second).membership.role == Role.AUDITOR
+    with pytest.raises(ControlApiError) as error:
+        service.update_membership(
+            OWNER,
+            first,
+            identifier,
+            MembershipUpdate(role=Role.REQUESTER, active=True, expected_version=1),
+        )
+    assert error.value.status_code == 409
+    service.update_membership(
+        OWNER,
+        first,
+        identifier,
+        MembershipUpdate(role=Role.APPROVER, active=True, expected_version=2),
+    )
+    assert service.workspace(ALICE, first).membership.role == Role.APPROVER
+    assert service.workspace(ALICE, first).membership.version == 3
+    with pytest.raises(ControlApiError):
+        service.update_membership(
+            OWNER,
+            second,
+            user_key(BOB.subject),
+            MembershipUpdate(role=Role.APPROVER, active=True, expected_version=1),
+        )
+
+
+@pytest.mark.parametrize("actor", [ALICE, BOB, OWNER.model_copy(update={"mfa": False})])
+def test_lifecycle_requires_central_admin_with_mfa(
+    service: AdmissionService,
+    actor: Identity,
+) -> None:
+    org = admit(service, ALICE, Role.ORGANIZATION_ADMIN)
+    record_id, _ = pending_invitation(service)
+    with pytest.raises(ControlApiError):
+        service.list_records(actor, "invitations")
+    with pytest.raises(ControlApiError):
+        service.revoke_invitation(actor, record_id, InvitationRevoke(expected_version=1))
+    with pytest.raises(ControlApiError):
+        service.list_members(actor, org)
+    with pytest.raises(ControlApiError):
+        service.update_membership(
+            actor,
+            org,
+            user_key(ALICE.subject),
+            MembershipUpdate(role=Role.APPROVER, active=True, expected_version=1),
+        )
+
+
+def test_membership_cannot_override_global_suspension_or_self_promote(
+    service: AdmissionService,
+) -> None:
+    org = admit(service, ALICE)
+    identifier = user_key(ALICE.subject)
+    user = next(row for row in service.list_records(OWNER, "users") if row["subject"] == "alice")
+    service.set_administrator(
+        OWNER, identifier, StatusUpdate(active=True, expected_version=user["version"])
+    )
+    with pytest.raises(ControlApiError):
+        service.update_membership(
+            ALICE.model_copy(update={"mfa": True}),
+            org,
+            identifier,
+            MembershipUpdate(role=Role.APPROVER, active=True, expected_version=1),
+        )
+    service.set_status(OWNER, "organizations", org, StatusUpdate(active=False, expected_version=1))
+    with pytest.raises(ControlApiError):
+        service.update_membership(
+            OWNER,
+            org,
+            identifier,
+            MembershipUpdate(role=Role.APPROVER, active=True, expected_version=1),
+        )
+    service.set_status(OWNER, "organizations", org, StatusUpdate(active=True, expected_version=2))
+    service.set_status(
+        OWNER, "users", identifier, StatusUpdate(active=False, expected_version=user["version"] + 1)
+    )
+    with pytest.raises(ControlApiError):
+        service.update_membership(
+            OWNER,
+            org,
+            identifier,
+            MembershipUpdate(role=Role.APPROVER, active=True, expected_version=1),
+        )
+
+
+def test_lifecycle_audit_failure_rolls_back_both_mutations(
+    service: AdmissionService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    org = admit(service, ALICE)
+    record_id, token = pending_invitation(service)
+    original = MemoryTransaction.put
+
+    def fail(self: MemoryTransaction, path: str, document: dict[str, object]) -> None:
+        if path.startswith("admission_audit/"):
+            raise RuntimeError("audit unavailable")
+        original(self, path, document)
+
+    monkeypatch.setattr(MemoryTransaction, "put", fail)
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        service.revoke_invitation(OWNER, record_id, InvitationRevoke(expected_version=1))
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        service.update_membership(
+            OWNER,
+            org,
+            user_key(ALICE.subject),
+            MembershipUpdate(role=Role.APPROVER, active=False, expected_version=1),
+        )
+    assert (
+        service.store.transact(lambda tx: tx.get(member_path(org, ALICE.subject)))["version"] == 1
+    )
+    assert service.workspace(ALICE, org).membership.role == Role.AUDITOR
+    assert not service.list_records(OWNER, "invitations")[-1].get("revoked")
+    assert token not in str(service.store.list("admission_audit"))
+
+
+def test_lifecycle_http_boundary_and_redacted_validation_audit(
+    service: AdmissionService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    org = admit(service, ALICE, Role.ORGANIZATION_ADMIN)
+    record_id, _ = pending_invitation(service)
+    app = create_app(
+        settings=Settings(
+            _env_file=None,
+            APP_ENV="test",
+            ENTERPRISE_ACCESS_ENABLED=True,
+            IDENTITY_PLATFORM_PROJECT="test-project",
+            GOOGLE_CLOUD_PROJECT="test-project",
+            PERSISTENCE_BACKEND="firestore",
+        ),
+        repository=InMemoryChangeStateRepository(),
+        admission_service=service,
+        identity_provider=TestIdentityProvider(),
+    )
+    owner = {"Authorization": "Bearer owner-fixture"}
+    alice = {"Authorization": "Bearer alice-fixture"}
+    members = f"/v1/access/admin/organizations/{org}/members"
+    membership = f"{members}/{user_key(ALICE.subject)}"
+    revoke = f"/v1/access/admin/invitations/{record_id}/revoke"
+    update = {"role": "approver", "active": False, "expected_version": 1}
+    with TestClient(app, raise_server_exceptions=False) as client:
+        assert client.get(members).status_code == 401
+        assert client.get(members, headers=alice).status_code == 403
+        assert client.patch(membership, headers=alice, json=update).status_code == 403
+        assert client.post(revoke, headers=alice, json={"expected_version": 1}).status_code == 403
+        assert client.get(members, headers=owner).json()["items"][0]["subject"] == ALICE.subject
+        invalid = {**update, "role": "platform_admin", "private-fixture-value": "do-not-log"}
+        response = client.patch(membership, headers=owner, json=invalid)
+        assert response.status_code == 422
+        audit = str(service.store.list("admission_audit"))
+        assert "validation_error" in audit
+        assert "do-not-log" not in audit + response.text
+        assert "private-fixture-value" not in audit + response.text
+        assert client.patch(membership, headers=owner, json=update).status_code == 204
+        assert client.patch(membership, headers=owner, json=update).status_code == 409
+        assert client.get(f"/v1/access/organizations/{org}", headers=alice).status_code == 403
+        assert client.post(revoke, headers=owner, json={"expected_version": 1}).status_code == 204
+        assert client.post(revoke, headers=owner, json={"expected_version": 1}).status_code == 409
+
+        # Rejected requests must fail loudly if their audit cannot persist.
+        def audit_unavailable(actor: str, reason: str) -> None:
+            raise RuntimeError("audit unavailable")
+
+        monkeypatch.setattr(service, "record_rejection", audit_unavailable)
+        assert client.patch(membership, headers=owner, json=invalid).status_code == 500

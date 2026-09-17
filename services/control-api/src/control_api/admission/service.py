@@ -14,7 +14,9 @@ from control_api.admission.models import (
     Identity,
     Invitation,
     InvitationCreate,
+    InvitationRevoke,
     Membership,
+    MembershipUpdate,
     Organization,
     StatusUpdate,
     User,
@@ -172,6 +174,7 @@ class AdmissionService:
                 invitation.email != identity.email.lower()
                 or invitation.expires_at <= self.clock()
                 or invitation.redeemed_by is not None
+                or invitation.revoked
                 or inviter is None
                 or not inviter.active
                 or not inviter.platform_admin
@@ -202,9 +205,9 @@ class AdmissionService:
             )
             tx.put(
                 path,
-                invitation.model_copy(update={"redeemed_by": identity.subject}).model_dump(
-                    mode="json"
-                ),
+                invitation.model_copy(
+                    update={"redeemed_by": identity.subject, "version": invitation.version + 1}
+                ).model_dump(mode="json"),
             )
             self._audit(tx, identity.subject, "invitation_redeemed", invitation.invitation_id)
 
@@ -245,10 +248,122 @@ class AdmissionService:
         self.store.transact(operation)
 
     def list_records(self, identity: Identity, kind: str, *, after: str = "") -> list[Document]:
-        if kind not in {"organizations", "users", "audit"}:
+        if kind not in {"organizations", "users", "audit", "invitations"}:
             raise denied()
         self.store.transact(lambda tx: require_admin(tx, identity))
-        return self.store.list(f"admission_{kind}", after=after)
+        records = self.store.list(f"admission_{kind}", after=after)
+        if kind == "invitations":
+            # Normalize older records with no lifecycle fields; never expose a raw token.
+            result: list[Document] = []
+            now = self.clock()
+            for record in records:
+                invitation = Invitation.model_validate(
+                    {key: value for key, value in record.items() if key != "record_id"}
+                )
+                status = "pending"
+                if invitation.revoked:
+                    status = "revoked"
+                elif invitation.redeemed_by is not None:
+                    status = "redeemed"
+                elif invitation.expires_at <= now:
+                    status = "expired"
+                result.append(
+                    {
+                        **invitation.model_dump(mode="json"),
+                        "record_id": record["record_id"],
+                        "status": status,
+                    }
+                )
+            return result
+        return records
+
+    def revoke_invitation(
+        self, identity: Identity, identifier: str, request: InvitationRevoke
+    ) -> None:
+        path = f"admission_invitations/{identifier}"
+
+        def operation(tx: Transaction) -> None:
+            require_admin(tx, identity)
+            document = tx.get(path)
+            if document is None:
+                raise denied()
+            invitation = Invitation.model_validate(document)
+            if (
+                invitation.version != request.expected_version
+                or invitation.revoked
+                or invitation.redeemed_by is not None
+                or invitation.expires_at <= self.clock()
+            ):
+                raise ControlApiError(
+                    "version_conflict", "Refresh this record before updating.", 409
+                )
+            tx.put(
+                path,
+                invitation.model_copy(
+                    update={"revoked": True, "version": invitation.version + 1}
+                ).model_dump(mode="json"),
+            )
+            self._audit(tx, identity.subject, "invitation_revoked", invitation.invitation_id)
+
+        self.store.transact(operation)
+
+    def list_members(
+        self, identity: Identity, organization_id: str, *, after: str = ""
+    ) -> list[Document]:
+        def authorize(tx: Transaction) -> None:
+            require_admin(tx, identity)
+            if tx.get(f"admission_organizations/{organization_id}") is None:
+                raise denied()
+
+        self.store.transact(authorize)
+        return self.store.list(f"admission_organizations/{organization_id}/members", after=after)
+
+    def update_membership(
+        self,
+        identity: Identity,
+        organization_id: str,
+        identifier: str,
+        request: MembershipUpdate,
+    ) -> None:
+        path = f"admission_organizations/{organization_id}/members/{identifier}"
+
+        def operation(tx: Transaction) -> None:
+            require_admin(tx, identity)
+            document = tx.get(path)
+            organization = tx.get(f"admission_organizations/{organization_id}")
+            if document is None or organization is None:
+                raise denied()
+            member = Membership.model_validate(document)
+            user = read_user(tx, member.subject)
+            if (
+                member.organization_id != organization_id
+                or user_key(member.subject) != identifier
+                or member.subject == identity.subject
+                or user is None
+                or organization_id not in user.organization_ids
+            ):
+                raise denied()
+            if member.version != request.expected_version:
+                raise ControlApiError(
+                    "version_conflict", "Refresh this record before updating.", 409
+                )
+            if request.active and (
+                not user.active or not Organization.model_validate(organization).active
+            ):
+                raise denied()
+            tx.put(
+                path,
+                member.model_copy(
+                    update={
+                        "active": request.active,
+                        "role": request.role,
+                        "version": member.version + 1,
+                    }
+                ).model_dump(mode="json"),
+            )
+            self._audit(tx, identity.subject, "membership_updated", path)
+
+        self.store.transact(operation)
 
     def set_administrator(self, identity: Identity, identifier: str, request: StatusUpdate) -> None:
         """Only the bootstrapped owner can appoint/revoke admission administrators."""

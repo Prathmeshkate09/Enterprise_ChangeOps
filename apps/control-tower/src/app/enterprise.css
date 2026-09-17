@@ -356,6 +356,15 @@
 .access-grid .access-card {
   margin-bottom: 0;
 }
+.access-lifecycle {
+  overflow-wrap: anywhere;
+}
+.access-lifecycle .access-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+.access-lifecycle .access-button {
+  min-height: 2.75rem;
+}
 .access-card h2 {
   margin-bottom: 0.85rem;
 }
@@ -430,6 +439,19 @@
   color: #7a8b92;
   font-size: 0.7rem;
 }
+.access-mobile-label {
+  display: none;
+}
+.access-accounts-wrap {
+  container-type: inline-size;
+}
+.access-root .access-accounts-table .access-button {
+  min-height: 2.75rem;
+}
+.access-root .access-account-status {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .access-details > div {
   display: grid;
   grid-template-columns: 10rem 1fr;
@@ -472,6 +494,41 @@
   }
   .access-login-story {
     padding: 3rem;
+  }
+}
+@container (max-width: 30rem) {
+  /* Keep one set of forms and explicit table roles when rows become cards. */
+  .access-root .access-accounts-table {
+    display: block;
+    min-width: 0;
+  }
+  .access-accounts-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .access-accounts-table tbody {
+    display: block;
+  }
+  .access-accounts-table tbody tr {
+    display: block;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #dce5e7;
+  }
+  .access-root .access-accounts-table td {
+    display: block;
+    padding: 0.5rem 0;
+    border: 0;
+  }
+  .access-accounts-table .access-mobile-label {
+    display: block;
+    color: #53656e;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
   }
 }
 @media (max-width: 760px) {

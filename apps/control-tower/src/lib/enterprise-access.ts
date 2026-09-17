@@ -42,6 +42,18 @@ export type AccessUser = {
   platform_admin: boolean;
   version: number;
 };
+export type AccessMembership = Workspace["membership"];
+export type AccessInvitation = {
+  status: "pending" | "revoked" | "redeemed" | "expired";
+  invitation_id: string;
+  email: string;
+  organization_id: string;
+  role: string;
+  expires_at: string;
+  redeemed_by: string | null;
+  revoked: boolean;
+  version: number;
+};
 export type AccessAudit = {
   event_id: string;
   actor: string;

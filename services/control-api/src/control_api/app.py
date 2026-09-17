@@ -121,7 +121,7 @@ def create_app(
     @app.exception_handler(ControlApiError)
     async def control_error_handler(request: Request, error: ControlApiError) -> JSONResponse:
         if admission_service is not None and request.url.path.startswith("/v1/access"):
-            if error.status_code in {401, 403, 409}:
+            if error.status_code in {401, 403, 409, 422}:
                 await run_in_threadpool(
                     admission_service.record_rejection,
                     getattr(request.state, "admission_actor", "unauthenticated"),
@@ -139,6 +139,19 @@ def create_app(
         request: Request,
         error: RequestValidationError,
     ) -> JSONResponse:
+        if admission_service is not None and request.url.path.startswith("/v1/access"):
+            await run_in_threadpool(
+                admission_service.record_rejection,
+                getattr(request.state, "admission_actor", "unauthenticated"),
+                "validation_error",
+            )
+            # Validation locations/messages can contain attacker-controlled field names.
+            return _error_response(
+                request,
+                status_code=422,
+                code="validation_error",
+                message="Request validation failed.",
+            )
         return _error_response(
             request,
             status_code=422,

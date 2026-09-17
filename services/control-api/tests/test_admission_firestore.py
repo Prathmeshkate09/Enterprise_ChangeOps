@@ -5,8 +5,15 @@ from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import pytest
-from control_api.admission.models import Identity, InvitationCreate, Role, StatusUpdate
-from control_api.admission.service import AdmissionService
+from control_api.admission.models import (
+    Identity,
+    InvitationCreate,
+    InvitationRevoke,
+    MembershipUpdate,
+    Role,
+    StatusUpdate,
+)
+from control_api.admission.service import AdmissionService, user_key
 from control_api.admission.store import FirestoreStore
 from control_api.errors import ControlApiError
 from google.auth.credentials import AnonymousCredentials
@@ -62,10 +69,44 @@ def test_firestore_admission_survives_restart_and_serializes_redemption() -> Non
     rows = fresh().list_records(owner, "organizations")
     assert len(rows) == 1
     assert fresh().list_records(owner, "organizations", after=rows[-1]["record_id"]) == []
+    fresh().update_membership(
+        owner,
+        org.organization_id,
+        user_key(member.subject),
+        MembershipUpdate(active=False, role=Role.APPROVER, expected_version=1),
+    )
+    with pytest.raises(ControlApiError):
+        fresh().workspace(member, org.organization_id)
+    fresh().update_membership(
+        owner,
+        org.organization_id,
+        user_key(member.subject),
+        MembershipUpdate(active=True, role=Role.APPROVER, expected_version=2),
+    )
+    assert fresh().workspace(member, org.organization_id).membership.role == Role.APPROVER
+    members = fresh().list_members(owner, org.organization_id)
+    assert members[0]["version"] == 3
+    assert fresh().list_members(owner, org.organization_id, after=members[0]["record_id"]) == []
+    invitation, token = fresh().invite(
+        owner,
+        InvitationCreate(
+            email="new@example.test",
+            organization_id=org.organization_id,
+            role=Role.AUDITOR,
+        ),
+    )
+    record = next(
+        item
+        for item in fresh().list_records(owner, "invitations")
+        if item["invitation_id"] == invitation.invitation_id
+    )
+    fresh().revoke_invitation(owner, record["record_id"], InvitationRevoke(expected_version=1))
+    with pytest.raises(ControlApiError):
+        fresh().redeem(Identity(subject="new", email="new@example.test"), token)
     fresh().set_status(
         owner, "organizations", org.organization_id, StatusUpdate(active=False, expected_version=1)
     )
     with pytest.raises(ControlApiError):
         fresh().workspace(member, org.organization_id)
-    assert len(fresh().list_records(owner, "audit")) == 5
+    assert len(fresh().list_records(owner, "audit")) == 9
     # No cleanup calls: emulator-only project is unique; never enumerate/delete shared records.

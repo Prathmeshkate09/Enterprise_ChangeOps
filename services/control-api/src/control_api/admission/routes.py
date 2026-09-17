@@ -9,9 +9,12 @@ from starlette.concurrency import run_in_threadpool
 from control_api.admission.identity import IdentityProvider
 from control_api.admission.models import (
     AccessView,
+    Identifier,
     Identity,
     InvitationCreate,
     InvitationRedeem,
+    InvitationRevoke,
+    MembershipUpdate,
     Organization,
     OrganizationCreate,
     SessionCreate,
@@ -81,6 +84,38 @@ def build_admission_router(service: AdmissionService, provider: IdentityProvider
             "token": token,
             "expires_at": invitation.expires_at.isoformat(),
         }
+
+    @router.post("/admin/invitations/{identifier}/revoke", status_code=204)
+    async def revoke_invitation(
+        identifier: Identifier,
+        request: InvitationRevoke,
+        actor: Annotated[Identity, Depends(identity)],
+    ) -> Response:
+        await run_in_threadpool(service.revoke_invitation, actor, identifier, request)
+        return Response(status_code=204)
+
+    @router.get("/admin/organizations/{organization_id}/members")
+    async def list_members(
+        organization_id: Identifier,
+        actor: Annotated[Identity, Depends(identity)],
+        after: Annotated[str, Query(pattern=r"^[A-Za-z0-9_-]{0,128}$")] = "",
+    ) -> Document:
+        items = await run_in_threadpool(
+            partial(service.list_members, actor, organization_id, after=after)
+        )
+        return {"items": items, "next_cursor": items[-1]["record_id"] if len(items) == 50 else None}
+
+    @router.patch("/admin/organizations/{organization_id}/members/{identifier}", status_code=204)
+    async def update_membership(
+        organization_id: Identifier,
+        identifier: Identifier,
+        request: MembershipUpdate,
+        actor: Annotated[Identity, Depends(identity)],
+    ) -> Response:
+        await run_in_threadpool(
+            service.update_membership, actor, organization_id, identifier, request
+        )
+        return Response(status_code=204)
 
     @router.get("/admin/{kind}")
     async def list_records(
